@@ -26,7 +26,7 @@ from collections import defaultdict, namedtuple
 from ftrace.interval import Interval, IntervalList
 from ftrace.event import EventList
 from ftrace.task import Task, TaskState
-from ftrace.ftrace import register_api
+from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.composites import sorted_items
 from ftrace.common import ConstantBase
 from ftrace.utils.decorators import requires, memoize
@@ -53,7 +53,7 @@ class BusyState(ConstantBase):
     UNKNOWN = ()
 
 @register_api('cpu')
-class CPU(object):
+class CPU(FTraceComponent):
     """
     Class with APIs to process all CPU related events such as:
         - number of simultaneously active cores [x]
@@ -66,6 +66,9 @@ class CPU(object):
         self._trace = trace
         self._events = trace.events
 
+    def _initialize(self):
+        """
+        """
         self._parse_rq_events()
         self._parse_freq_events()
         self._parse_cpu_idle_events()

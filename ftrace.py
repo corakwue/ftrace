@@ -20,6 +20,8 @@
 
 import os
 import re
+import abc
+from six import with_metaclass
 
 try:
     from logbook import Logger
@@ -46,6 +48,23 @@ class Filetype(ConstantBase):
     UNKNOWN = ()
     FTRACE = ()
     SYSTRACE = ()
+
+#------------------------------------------------------------------------------
+# FTraceComponent
+
+class FTraceComponent(with_metaclass(abc.ABCMeta)):
+    """Abstract Base Class for FTrace Components APIs"""
+
+    _initialized = False
+
+    def __repr__(self):
+        return "{}".format(self.__class__.__name__)
+
+    def _initialize(self):
+        raise NotImplementedError
+
+#------------------------------------------------------------------------------
+# FTrace
 
 class Ftrace(object):
 
@@ -210,7 +229,7 @@ class Ftrace(object):
         except ParserError, e:
             log.exception(e)
             log.warn('Error parsing {tp}'.format(tp=tracepoint))
-        finally:               
+        finally:
             return rv if rv else data
 
     def _check_tracer(self, line):
@@ -245,9 +264,7 @@ class Ftrace(object):
     def _initiate_apis(self):
         """Start initialized all registered apis after parsing events in file"""
         for name, cls in self._APIS.iteritems():
-            # Make all properties
-           setattr(self, name, cls(self))
-
+            setattr(self, name, cls(self))
 
 def register_api(name):
     """Decorator for registering api methods"""

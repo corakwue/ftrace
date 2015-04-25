@@ -82,7 +82,7 @@ class Task(TaskBase):
     __slots__ = ()
 
     def __new__(cls, name, pid, prio=None, tgid=None, ppid=None, **kwargs):
-        pid = int(pid)
+        pid = int(pid) if pid else pid
         prio = int(prio) if prio else prio
         try:
             tgid = int(tgid)

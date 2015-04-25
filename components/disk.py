@@ -27,10 +27,10 @@ except ImportError:
 
 from collections import defaultdict, namedtuple
 from ftrace.interval import Interval, IntervalList
-from ftrace.ftrace import register_api
+from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.composites import sorted_items
 from ftrace.utils.decorators import requires, coroutine, memoize
-from ftrace.io import DiskIOType, DiskCommand
+from ftrace.io import DiskCommand
 
 log = Logger('Disk')
 
@@ -39,7 +39,7 @@ BLOCK_TRACEPOINTS = ['block_rq_complete', 'block_rq_insert', 'block_rq_issue']
 IOInterval = namedtuple('IOLatency', ['io_type', 'task', 'device', 'sector', 'numSectors', 'interval', 'commands', 'errors'])
 
 @register_api('disk')
-class Disk(object):
+class Disk(FTraceComponent):
     """
     Class with APIs to process disk/block trace events
 
@@ -52,9 +52,11 @@ class Disk(object):
         self._io_insert_intervals_by_op = defaultdict(IntervalList)
         self._io_issue_intervals_by_op = defaultdict(IntervalList)
 
+    def _initialize(self):
         self._parse_io_events()
 
     @property
+    @requires('clock_set_rate')
     def ops(self):
         return set(self._io_issue_intervals_by_op.keys())
 
@@ -71,8 +73,18 @@ class Disk(object):
 ##        except KeyError:
 ##            return 0.0
 ##        except:
-##            # could be busy or idle entire time.
-##            return -1
+##            return -1.
+
+    @requires(*BLOCK_TRACEPOINTS)
+    @memoize
+    def total_io_requests(self, op=None, interval=None, by='issue'):
+        try:
+            request_intervals = self.io_request_intervals(op=op, interval=interval)
+            return len(request_intervals)
+        except KeyError:
+            return 0.0
+        except:
+            return -1.
 
     @requires(*BLOCK_TRACEPOINTS)
     @memoize
@@ -85,7 +97,9 @@ class Disk(object):
             returns intervals from insert to queue ==> complete
 
         For list of io_types (aka ops) see `trace.disk.ops`
-        # TODO: Filter by # of sectors.
+        # TODO: Filter by # of sectors & devices.
+
+        See `DiskIOType` in `ftrace.io` for op.
         """
         if by == 'insert':
             interval_dict = self._io_insert_intervals_by_op

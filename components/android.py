@@ -28,21 +28,24 @@ except ImportError:
 from collections import defaultdict, namedtuple
 from ftrace.interval import Interval, IntervalList
 from ftrace.event import EventList
-from ftrace.ftrace import register_api
+from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.composites import sorted_items
 from ftrace.utils.decorators import requires, coroutine, memoize
 from ftrace.atrace import AtraceTag
+from ftrace.common import filter_by_task
 
 log = Logger('Android')
+
+VSYNC = float(1/60.) # 16.67ms
 
 Context = namedtuple('Context', ['pid', 'name', 'interval', 'event'])
 Counter = namedtuple('Counter', ['pid', 'name', 'value', 'interval', 'event'])
 # For app  launch latency
 LaunchLatency = namedtuple('LaunchLatency', ['task', 'interval', 'latency'])
-
+InputLatency = namedtuple('InputLatency', ['interval', 'latency'])
 
 @register_api('android')
-class Android(object):
+class Android(FTraceComponent):
     """
     Class with APIs to process android trace events
     written to the trace buffer. These are events not
@@ -77,9 +80,11 @@ class Android(object):
         self.__event_handlers = {}
         self._tmw_intervals_by_name = defaultdict(IntervalList)
 
+    def _initialize(self):
         self._parse_tmw_events()
 
     @property
+    @requires('tracing_mark_write')
     def names(self):
         return set(self._tmw_intervals_by_name.keys())
 
@@ -100,6 +105,152 @@ class Android(object):
             intervals = filter(lambda it: it.event.task == task, intervals)
 
         return intervals
+
+    #--------------------------------------------------------------------------
+    """
+    Utility script to estimate Frame Rate (FPS) and Jank.
+    
+    Jank = Interval when surfaceFlinger failed to present.
+    """
+    @requires('tracing_mark_write')
+    @memoize
+    def framerate(self, interval=None):
+        """
+        Since SurfaceFlinger(SF) in Android updates the frame-buffer only 
+        when there's work to be done. Measuring FPS in traditional sense as
+        frames / seconds would be incorrect as time might include intervals
+        when no screen updates occurred.
+        
+        To account for this, we use SF Vsync which is set to 0 when SurfaceFlinger
+        has work to do. We accumulate intervals when a framebuffer was posted
+        and use this as Frame-rate.
+        
+        See https://source.android.com/devices/graphics/implement.html
+        """
+        self._jank_intervals_do_not_use = IntervalList()
+        present_time, presented_frames = 0.0, 0.0
+        
+        for vsync_event in self.event_intervals(name='VSYNC-sf', 
+                                                interval=interval):
+            duration = vsync_event.interval.duration
+            if duration < 2*VSYNC: # skip interval when we had nothing to do.
+                present_time += duration
+                temp = len(self.event_intervals('postFramebuffer', 
+                                                interval=vsync_event.interval))
+                presented_frames += temp
+                if temp == 0.0:
+                    self._jank_intervals_do_not_use.append(vsync_event)
+        
+        return presented_frames/present_time
+
+    @requires('tracing_mark_write')
+    @memoize  
+    def jank_intervals(self, interval=None):
+        """
+        Returns list of intervals when a jank (missed frame) occurred.
+        """
+        _ = self.framerate(interval=interval)
+        return self._jank_intervals_do_not_use
+        
+    #--------------------------------------------------------------------------
+    """
+    Utility script to estimate input response latency.
+
+    Inputs (Touch/Key presses) triggers USB HID report or I2C bus interrupt thats
+    sent to Linux Kernel and mapped by Input driver to specific event type and
+    code as standardized by Linux Input Protocol,defined by OEM-mapping
+    in `linux/input.h`
+
+     Next `EventHub` in Android OS layer reads the translated signals by opening
+     `evdev` devices for each input device. Then Android's `InputReader`
+     component then decodes the input events according to the device class and
+     produces a stream of Android input events.
+
+    Finally, Android's `InputReader` sends input events to the `InputDispatcher`
+    which forwards them to the appropriate window.
+
+    We define input latency as time from handling IRQ from touch driver (e.g.
+    irq/13-fts_touc) to time when you a screen update from SurfaceFlinger
+    after `DeliverInputEvent`. Technically speaking, this is referred to as
+    'input-to-display' latency.
+
+    IMPORTANT: We do not account for delays from touch till when
+    IRQ is triggered by touch device. This is typically low (<5ms)
+    depending on HW.
+
+    Further Reading:
+    ---------------
+
+    https://source.android.com/devices/input/overview.html
+    https://www.kernel.org/doc/Documentation/input/event-codes.txt
+
+    """
+    @requires('tracing_mark_write', 'sched_switch', 'sched_wakeup')
+    @memoize
+    def input_latency(self, touch_irq_name, interval=None):
+        """
+        Returns input-to-display latencies seen in trace.
+
+        IMPORTANT: Trace must be collected with 'input' and 'view' events.
+        """
+        try:
+            return self._input_latencies.slice(interval=interval)
+        except AttributeError:
+            return self._input_latency_handler(touch_irq_name=touch_irq_name).\
+                        slice(interval=interval)
+
+
+    def _input_latency_handler(self, touch_irq_name):
+        """
+        Returns list of all input events
+        """
+        self._input_latencies = IntervalList()
+        all_tasks = self._trace.cpu.task_intervals()
+        touch_irqs = IntervalList(filter_by_task(
+            all_tasks, 'name', touch_irq_name, 'any'))
+
+        def _input_intervals():
+            """
+            Generator that yields intervals when discrete input event(s)
+            are read & decoded by Android `Input Reader`.
+
+            x__x__x____IR___ID_ID_ID___DI_SU__DI_SU__DI_SU______
+
+            x = multiple input IRQs (multi-touch translated by Android Input Framework)
+            IR = Input Reader [read/decodes multiple events @ once]
+            ID = Input Dispatch [dispatches each input event]
+            DI = Deliver Input [ appropriate window consumes input event ]
+            SU = SurfaceFlinger Screen Update due to window handling input event
+
+            """
+            last_timestamp = 0.0
+            for ir_event in filter_by_task(all_tasks, 'name', 'InputReader', 'any'):
+                yield Interval(last_timestamp, ir_event.interval.end)
+                last_timestamp = ir_event.interval.end
+
+        for interval in _input_intervals():
+            # Use first input event within this interval
+            start_ts = touch_irqs.slice(interval=interval, 
+                                        trimmed=False)[0].interval.start
+            end_ts = start_ts
+            post_ir_interval = Interval(interval.end, self._trace.duration)
+            di_events = self.event_intervals(name='deliverInputEvent',
+                                             interval=post_ir_interval)
+            if di_events:
+                post_di_interval = Interval(di_events[0].interval.start,
+                                            self._trace.duration)
+
+                pfb_events = self.event_intervals(name='postFramebuffer',
+                                                  interval=post_di_interval)
+
+                if pfb_events:
+                    end_ts = pfb_events[0].interval.end
+
+            input_interval = Interval(start=start_ts, end=end_ts)
+            self._input_latencies.append(InputLatency(interval=input_interval,
+                                        latency=input_interval.duration))
+
+        return self._input_latencies
 
     #---------------------------------------------------------------------------
     """

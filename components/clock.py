@@ -27,7 +27,7 @@ except ImportError:
 from collections import defaultdict, namedtuple
 from ftrace.interval import Interval, IntervalList
 from ftrace.event import EventList
-from ftrace.ftrace import register_api
+from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.utils.decorators import requires
 
 log = Logger('Clock')
@@ -36,7 +36,7 @@ log = Logger('Clock')
 FreqInterval = namedtuple('FreqInterval', ['clock', 'frequency', 'interval'])
 
 @register_api('clock')
-class Clock(object):
+class Clock(FTraceComponent):
     """
     Class with APIs to process all Clock related events such as:
         - frequency residencies for any clock
@@ -47,9 +47,11 @@ class Clock(object):
         self._trace = trace
         self._events = trace.events
 
+    def _initialize(self):
         self._parse_clock_events()
 
     @property
+    @requires('clock_set_rate')
     def names(self):
         return set(self._freq_events_by_clock.keys())
 

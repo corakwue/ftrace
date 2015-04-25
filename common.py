@@ -22,6 +22,7 @@
 import sys
 import types
 from  .third_party.enum.enum import Enum, unique
+from itertools import ifilter
 
 def is_list_like(arg):
     """Returns True if object is list-like, False otherwise"""
@@ -82,6 +83,37 @@ def bind_method(cls, name, func):
         setattr(cls, name, types.MethodType(func, None, cls))
     else:
         setattr(cls, name, func)
+
+
+def filter_by_task(iterable, attr, value, how='first'):
+    """
+    Filter iterable to objects whose `attr` has `value`.
+
+    Parameters
+    ----------
+
+    iterable : iterable
+        Iterable <list, set> object
+    attr : string
+        Name of attribute to compare.
+    value : object
+        Value to filter by.
+    """
+    filter_func = lambda event: getattr(event.task, attr, None) == value
+    filtered = ifilter(filter_func, iterable)
+    rv = None
+    try:
+        if how in ('any', 'all'):
+            rv = iter(filtered)
+        elif how == 'first':
+            rv = filtered.next()
+        elif how == 'last':
+            for rv in filtered:
+                pass
+    except:
+        rv = None
+    finally:
+        return rv
 
 
 class FtraceError(Exception):

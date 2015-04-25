@@ -39,6 +39,9 @@ def requires(*tracepoints):
             if missing and missing not in notified:
                 log.warn(msg.format(tp=missing))
                 notified.add(missing)
+            if not getattr(cls, '_initialized', True):
+                cls._initialize()
+                cls._initialized = True
             return func(*args,**kwargs)
         return wrapped
     return wrapper
