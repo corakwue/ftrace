@@ -187,7 +187,7 @@ class Android(FTraceComponent):
     """
     @requires('tracing_mark_write', 'sched_switch', 'sched_wakeup')
     @memoize
-    def input_latency(self, touch_irq_name, interval=None):
+    def input_latency(self, irq_name, interval=None):
         """
         Returns input-to-display latencies seen in trace.
 
@@ -196,18 +196,18 @@ class Android(FTraceComponent):
         try:
             return self._input_latencies.slice(interval=interval)
         except AttributeError:
-            return self._input_latency_handler(touch_irq_name=touch_irq_name).\
+            return self._input_latency_handler(irq_name=irq_name).\
                         slice(interval=interval)
 
 
-    def _input_latency_handler(self, touch_irq_name):
+    def _input_latency_handler(self, irq_name):
         """
         Returns list of all input events
         """
         self._input_latencies = IntervalList()
         all_tasks = self._trace.cpu.task_intervals()
         touch_irqs = IntervalList(filter_by_task(
-            all_tasks, 'name', touch_irq_name, 'any'))
+            all_tasks, 'name', irq_name, 'any'))
 
         def _input_intervals():
             """
@@ -229,26 +229,28 @@ class Android(FTraceComponent):
                 last_timestamp = ir_event.interval.end
 
         for interval in _input_intervals():
-            # Use first input event within this interval
-            start_ts = touch_irqs.slice(interval=interval, 
-                                        trimmed=False)[0].interval.start
-            end_ts = start_ts
-            post_ir_interval = Interval(interval.end, self._trace.duration)
-            di_events = self.event_intervals(name='deliverInputEvent',
-                                             interval=post_ir_interval)
-            if di_events:
-                post_di_interval = Interval(di_events[0].interval.start,
-                                            self._trace.duration)
-
-                pfb_events = self.event_intervals(name='postFramebuffer',
-                                                  interval=post_di_interval)
-
-                if pfb_events:
-                    end_ts = pfb_events[0].interval.end
-
-            input_interval = Interval(start=start_ts, end=end_ts)
-            self._input_latencies.append(InputLatency(interval=input_interval,
-                                        latency=input_interval.duration))
+            irqs = touch_irqs.slice(interval=interval, trimmed=False)
+            # Necessary as we may be interested in different IRQ name
+            if irqs:
+                # Use first input event within this interval
+                start_ts = irqs[0].interval.start
+                end_ts = start_ts
+                post_ir_interval = Interval(interval.end, self._trace.duration)
+                di_events = self.event_intervals(name='deliverInputEvent',
+                                                 interval=post_ir_interval)
+                if di_events:
+                    post_di_interval = Interval(di_events[0].interval.start,
+                                                self._trace.duration)
+    
+                    pfb_events = self.event_intervals(name='postFramebuffer',
+                                                      interval=post_di_interval)
+    
+                    if pfb_events:
+                        end_ts = pfb_events[0].interval.end
+    
+                input_interval = Interval(start=start_ts, end=end_ts)
+                self._input_latencies.append(InputLatency(interval=input_interval,
+                                            latency=input_interval.duration))
 
         return self._input_latencies
 
