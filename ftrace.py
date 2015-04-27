@@ -113,6 +113,7 @@ class Ftrace(object):
             List of tracepoints to parse - nothing more!
         """
         self.filepath = filepath
+        
         self._initial_tps = tracepoints if (is_list_like(tracepoints) or tracepoints is None) else [tracepoints]
         self.filetype = self._check_filetype()
 
@@ -127,7 +128,8 @@ class Ftrace(object):
         self.tracer = None
         self.entries_in = 0
         self.entries_written = 0
-
+        self.filedir, self.filename = os.path.split(self.filepath)
+        
         success = self._parse_file()
         if success:
             self.interval = Interval(start=0.0, end=self.duration)
