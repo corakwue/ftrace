@@ -128,8 +128,10 @@ class IntervalList(list):
 
         rv = self[idx_left:idx_right] if left_adjust else []
 
-#        if trimmed and rv:
-#            rv[0].interval.start, rv[-1].interval.end = interval.start, interval.end
-#            return rv
-
+        if trimmed and rv:
+            for item in rv:
+                if item.interval.start < interval.start:
+                    item.interval.start = interval.start
+                if item.interval.end > interval.end:
+                    item.interval.end = interval.end
         return rv

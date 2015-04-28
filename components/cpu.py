@@ -376,6 +376,7 @@ class CPU(FTraceComponent):
                 yield event
 
         runnable_tasks = defaultdict(set)
+        update_running = defaultdict(lambda: False)
         last_seen_timestamps = defaultdict(lambda: defaultdict(lambda: 0.0))
         last_seen_state = defaultdict(lambda: defaultdict(lambda: TaskState.UNKNOWN))
         last_state = defaultdict(lambda: BusyState.UNKNOWN)
@@ -423,6 +424,7 @@ class CPU(FTraceComponent):
                                                state=current_state)
                     self._state_changes.append(state_change)
                     last_state[cpu] = current_state
+                    update_running[cpu] = True
 
                 # Track runnable tasks
                 if data.prev_state is TaskState.RUNNABLE:
@@ -433,11 +435,9 @@ class CPU(FTraceComponent):
                     except KeyError:
                         pass
 
-                if next_task.pid == 0:
-                    runnable_tasks[cpu].clear()
-                else:
+                # idle task runs only when nothing to run.
+                runnable_tasks[cpu].clear() if next_task.pid == 0 else \
                     runnable_tasks[cpu].add(next_task)
-
 
             elif tracepoint == 'sched_wakeup':
                 cpu = data.target_cpu
@@ -452,12 +452,13 @@ class CPU(FTraceComponent):
                 last_seen_timestamps[cpu][task] = timestamp
 
             num_runnable = len(runnable_tasks[cpu])
-            if num_runnable != last_rq_depth[cpu]:
+            if num_runnable != last_rq_depth[cpu] or update_running[cpu]:
+                running = 1 if last_state[cpu] == BusyState.BUSY else 0
                 rq_changes = RunQueueChange(cpu=cpu, timestamp=timestamp,
-                    runnable=num_runnable, running=min(len(runnable_tasks[cpu]), 1))
+                    runnable=num_runnable, running=running)
                 self._rq_events_by_cpu[cpu].append(rq_changes)
 
-            last_rq_depth[cpu] = len(runnable_tasks[cpu])
+            last_rq_depth[cpu] = num_runnable
 
         # closure
         for cpu, task in next_task_by_cpu.iteritems():
