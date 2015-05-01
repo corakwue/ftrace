@@ -116,6 +116,15 @@ def filter_by_task(iterable, attr, value, how='first'):
         return rv
 
 
+def unpack_bitmap(num):
+    """
+    Unpact bitmap to indicate which cores are set.
+    For instance 11d = 1011b = [3,1,0]
+    """
+    bit_length = num.bit_length()
+    return set(idx for idx in range(bit_length) if 2**idx & num)
+
+
 class FtraceError(Exception):
     """Base class for exceptions in this module."""
     msg = None

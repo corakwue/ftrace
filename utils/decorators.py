@@ -1,12 +1,14 @@
 from __future__ import print_function
 
-import sys
 import inspect
 from functools import wraps
 try:
     from logbook import Logger
 except ImportError:
-    from logging import Logger
+    import logging
+    logging.basicConfig()
+    from logging import getLogger as Logger
+
 try:
     set
 except NameError:
@@ -32,7 +34,7 @@ def requires(*tracepoints):
     global msg, notified
     def wrapper(func):
         @wraps(func)
-        def wrapped(*args,**kwargs):
+        def wrapped(*args, **kwargs):
             cls =  args[0]
             missing = ', '.join((tp for tp in tracepoints if tp not in cls._trace.tracepoints))
 
@@ -214,12 +216,15 @@ def getattr_(obj, name, default_thunk):
 def memoize(func, *args):
     dic = getattr_(func, "memoize_dic", dict)
     # memoize_dic is created at the first call
-    if args in dic:
-        return dic[args]
-    else:
-        result = func(*args)
-        dic[args] = result
-        return result
+    try:
+        if args in dic:
+            return dic[args]
+        else:
+            result = func(*args)
+            dic[args] = result
+            return result
+    except TypeError:
+        return func(*args)
 
 if __name__ == "__main__":
     import doctest; doctest.testmod()
