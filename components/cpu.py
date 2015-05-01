@@ -111,10 +111,10 @@ class CPU(FTraceComponent):
             return -1
 
     @requires('sched_switch', 'sched_wakeup')
-    @memoize
-    def simultaneously_busy_time(self, num_cores, interval=None):
-        """Returns total time when `num_cores` are busy"""
-        filter_func = lambda sbi: len(sbi.cpus) == num_cores
+    def simultaneously_busy_time(self, num_cores, cpus=None, interval=None):
+        """Returns total time when `num_cores` in `cpus` are busy"""
+        filter_func = lambda sbi: len(sbi.cpus.intersection(cpus)) == num_cores \
+            if cpus else len(sbi.cpus) == num_cores
         iterable = filter(filter_func, self.simultaneously_busy_intervals(interval=interval))
         return sum(it.interval.duration for it in iterable)
 
