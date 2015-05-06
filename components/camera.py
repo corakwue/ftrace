@@ -27,11 +27,8 @@ except ImportError:
 
 from collections import namedtuple
 from ftrace.interval import Interval, IntervalList
-from ftrace.event import EventList
 from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.utils.decorators import requires, memoize
-from ftrace.atrace import AtraceTag
-from ftrace.common import filter_by_task
 
 log = Logger('Camera')
 
@@ -238,9 +235,7 @@ class Camera(FTraceComponent):
 
         for interval in _preview_intervals():
             touch_events = deliver_inputs.slice(interval=interval, trimmed=False)
-            # Necessary as we may be interested in different IRQ name
             if touch_events:
-                # Use last input event within this interval
                 start_ts = touch_events[-1].interval.start
                 end_ts = start_ts
                 post_touch_interval = Interval(interval.end, self._trace.duration)
