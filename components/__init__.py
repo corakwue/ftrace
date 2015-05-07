@@ -4,3 +4,4 @@ from .android import Android
 from .disk import Disk
 from .camera import Camera
 from .audio import Audio
+from .thermal import Thermal

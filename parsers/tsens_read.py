@@ -33,25 +33,25 @@ __all__ = [TRACEPOINT]
 TsensReadBase = namedtuple(TRACEPOINT,
     [
     'temp', 
-    'tsens_tz_sensor'
+    'sensor'
     ]
 )
 
 class TsensRead(TsensReadBase):
     __slots__ = ()
-    def __new__(cls, temp, tsens_tz_sensor):
-            temp = int(temp)
+    def __new__(cls, temp, sensor):
+        temp = int(temp)
 
-            return super(cls, TsensRead).__new__(
-                cls,
-                temp=temp,
-                tsens_tz_sensor=tsens_tz_sensor,
-            )
+        return super(cls, TsensRead).__new__(
+            cls,
+            temp=temp,
+            sensor=sensor,
+        )
 
 tsens_read_pattern = re.compile(
         r"""
         temp=(?P<temp>\d+)\s+
-        tsens_tz_sensor=(?P<tsens_tz_sensor>.+)
+        sensor=(?P<sensor>.+)
         """,
         re.X|re.M
 )

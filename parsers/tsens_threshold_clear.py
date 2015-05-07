@@ -33,25 +33,25 @@ __all__ = [TRACEPOINT]
 TsensThresholdClearBase = namedtuple(TRACEPOINT,
     [
     'temp', 
-    'tsens_tz_sensor'
+    'sensor'
     ]
 )
 
 class TsensThresholdClear(TsensThresholdClearBase):
     __slots__ = ()
     def __new__(cls, temp, tsens_tz_sensor):
-            temp = int(temp)
+        temp = int(temp)
 
-            return super(cls, TsensThresholdClear).__new__(
-                cls,
-                temp=temp,
-                tsens_tz_sensor=tsens_tz_sensor,
-            )
+        return super(cls, TsensThresholdClear).__new__(
+            cls,
+            temp=temp,
+            sensor=tsens_tz_sensor,
+        )
 
 tsens_threshold_clear_pattern = re.compile(
         r"""
         temp=(?P<temp>\d+)\s+
-        tsens_tz_sensor=(?P<tsens_tz_sensor>.+)
+        sensor=(?P<sensor>.+)
         """,
         re.X|re.M
 )
