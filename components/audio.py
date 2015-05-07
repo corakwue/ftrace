@@ -61,6 +61,7 @@ class Audio(FTraceComponent):
     
     Reference:
     ----------
+    http://source.android.com/devices/audio/index.html
     https://www.youtube.com/watch?v=d3kfEeMZ65c
     https://android.googlesource.com/platform/frameworks/av/+/master/services/audioflinger/FastMixer.cpp
     
@@ -81,7 +82,7 @@ class Audio(FTraceComponent):
         """
         Returns number of frames written within specified interval.
         """
-        pass #"write"
+        raise NotImplementedError
         
     @requires('tracing_mark_write')
     @memoize
@@ -89,7 +90,7 @@ class Audio(FTraceComponent):
         """
         Returns number of write errors within specified interval.
         """
-        pass #"write"
+        raise NotImplementedError
 
     @requires('tracing_mark_write')
     @memoize
@@ -158,17 +159,14 @@ class Audio(FTraceComponent):
                                                latency=frdy.interval.duration))
             
         return audio_glitches
-    
-    # output latency
-    
-    
+        
     @requires('tracing_mark_write')
     @memoize
     def frame_write_intervals(self, interval=None):
         """
         Returns list of intervals frames were written within specified interval.
         """
-        pass
+        raise NotImplementedError
     
     @requires('tracing_mark_write')
     @memoize
