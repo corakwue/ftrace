@@ -21,7 +21,8 @@
 """ Interval:  Represents an interval of time defined by two timestamps.
     IntervalList: List with objects with interval, sorted/sliceable by interval.
 """
-from bisect import bisect_left, bisect
+from bisect import bisect
+from copy import deepcopy
 
 class Interval(object):
     """
@@ -49,8 +50,13 @@ class Interval(object):
 
     @property
     def duration(self):
-        """Returns relativedelta object"""
+        """Returns float"""
         return self.end - self.start
+        
+    def within(self, timestamp):
+        """Returns true if timestamp falls within interval"""
+        return True if (timestamp >= self.start) and \
+            (timestamp <= self.end) else False
 
 
 class IntervalList(list):
@@ -67,15 +73,24 @@ class IntervalList(list):
     def __repr__(self):
         return '\n'.join([item.__repr__() for item in self])
 
+
+    @property
+    def _start_times(self):
+        return (interval.start for interval in self._intervals)
+    
+    @property
+    def _end_times(self):
+        return (interval.end for interval in self._intervals)
+        
     @property
     def duration(self):
         """Duration of events in seconds"""
-        return sum(interval.duration for interval in self._intervals)
+        return max(self._end_times) - min(self._start_times)
 
     def __add_interval(self, obj):
         """Add interval to (sorted) intervals list"""
         idx = bisect(self._start_timestamps, obj.interval.start)
-        self._start_timestamps.insert(idx, obj.interval.start) # insert items sorted
+        self._start_timestamps.insert(idx, obj.interval.start)
         self._intervals.insert(idx, obj.interval)
         return idx
 
@@ -87,47 +102,33 @@ class IntervalList(list):
             raise TypeError("Must have interval attribute")
         super(self.__class__, self).insert(self.__add_interval(obj), obj)
 
-    def slice(self, interval, closed=None, trimmed=True):
+    def slice(self, interval, trimmed=True):
         """
         Returns list of objects whose interval fall
         between the specified interval.
 
         Parameters:
         -----------
-        closed : string or None, default None
-            Make the interval closed with respect to the given interval to
-            the 'left', 'right', or both sides (None)
         trimmed : bool, default True
             Trim interval of returned list of objects to fall within specified
             interval
         """
         if interval is None:
             return self
-
-        left_closed, right_closed = False, False
-
-        if closed is None:
-            left_closed = True
-            right_closed = True
-        elif closed == "left":
-            left_closed = True
-        elif closed == "right":
-            right_closed = True
-        else:
-            raise ValueError("Closed has to be either 'left', 'right' or None")
-
-        idx_left = bisect_left(self._start_timestamps, interval.start)
-        idx_right = bisect(self._start_timestamps, interval.end)
-
-        if interval.start in self._start_timestamps and not left_closed:
-            idx_left = idx_left + 1
-        if interval.end in self._start_timestamps and not right_closed:
-            idx_right = idx_right - 1
-
-        left_adjust = idx_left < len(self)
-
-        rv = self[idx_left:idx_right] if left_adjust else []
-
+        
+        try:
+            idx_left = min(idx for idx, _int in enumerate(self._intervals) 
+                if _int.within(interval.start))
+        except ValueError:
+            idx_left = None
+        try:
+            idx_right = max(idx for idx, _int in enumerate(self._intervals) 
+                if _int.within(interval.end)) + 1
+        except ValueError:
+            idx_right = None
+        
+        rv = deepcopy(self[idx_left:idx_right]) if (idx_left or idx_right) else IntervalList()
+        
         if trimmed and rv:
             for item in rv:
                 if item.interval.start < interval.start:
