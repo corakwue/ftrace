@@ -160,5 +160,5 @@ class EventList(list):
 
         left_adjust = idx_left < len(self)
 
-        return self[idx_left:idx_right] if left_adjust else []
+        return self[idx_left:idx_right] if left_adjust else EventList()
 
