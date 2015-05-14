@@ -29,6 +29,7 @@ from collections import namedtuple
 from ftrace.interval import Interval, IntervalList
 from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.utils.decorators import requires, memoize
+from ftrace.common import filter_by_task
 
 log = Logger('Camera')
 
@@ -91,8 +92,14 @@ class Camera(FTraceComponent):
         [2] https://android.googlesource.com/platform/hardware/libhardware/+/master/include/hardware/camera3.h
         """
         rv = IntervalList()
-        for cam_open_event in self._trace.android.event_intervals(
-            name='openCameraDevice', interval=interval):
+        # Several device vendors have different names
+        
+        cam_open_events = self._trace.android.event_intervals(
+            name='openCameraDevice', interval=interval) # Typical of SS
+        if not cam_open_events:
+            cam_open_events = self._trace.android.event_intervals(
+                name='AndroidCamera.open', interval=interval) # Huawei
+        for cam_open_event in cam_open_events:
             interval = cam_open_event.interval
             if interval.duration > 0.5:
                 log.warn("Camera open exceeded 500ms recommended time")
@@ -106,6 +113,8 @@ class Camera(FTraceComponent):
     def store_image_intervals(self, interval=None):
         """
         Returns list of intervals to store image intervals.
+        
+        # IMPORTANT: Not supported on Huawei devices yet. Missing markers.
         """
         rv = IntervalList()
         for store_image_event in self._trace.android.event_intervals(
@@ -139,6 +148,7 @@ class Camera(FTraceComponent):
         in the album (i.e. stores in media)
 
         # TODO: Handle ZSL.
+        # IMPORTANT: Not supported on Huawei devices yet. Missing markers.
         """
         try:
             return self._shutter_lag_latencies.slice(interval=interval)
@@ -229,7 +239,12 @@ class Camera(FTraceComponent):
             Generator that yields intervals when still images are captured
             """
             last_timestamp = 0.0
-            for sp_event in self._trace.android.event_intervals('doStopPreviewSync'):
+            sp_events = self._trace.android.event_intervals('doStopPreviewSync')
+            if not sp_events:
+                camera_task = self._trace.android.event_intervals('AndroidCamera.startPreview')[0].event.task
+                sp_events = (context for context in self._trace.android.event_intervals('disconnect') if context.event.task.pid == camera_task.pid)
+            
+            for sp_event in sp_events:
                 yield Interval(last_timestamp, sp_event.interval.start)
                 last_timestamp = sp_event.interval.start
 
@@ -238,8 +253,11 @@ class Camera(FTraceComponent):
             if touch_events:
                 start_ts = touch_events[-1].interval.start
                 end_ts = start_ts
-                post_touch_interval = Interval(interval.end, self._trace.duration)
+                post_touch_interval = Interval(start_ts, self._trace.duration)
                 si_events = self._trace.android.event_intervals(name='StartPreviewThread',
+                                                 interval=post_touch_interval)
+                if not si_events:
+                    si_events = self._trace.android.event_intervals(name='AndroidCamera.startPreview',
                                                  interval=post_touch_interval)
                 if si_events:
                     end_ts = si_events[0].interval.end
@@ -249,4 +267,4 @@ class Camera(FTraceComponent):
                                   interval=shutter_lag_interval,
                                   latency=shutter_lag_interval.duration))
 
-            return self._switch_latencies
+        return self._switch_latencies
