@@ -21,7 +21,7 @@
 """ Interval:  Represents an interval of time defined by two timestamps.
     IntervalList: List with objects with interval, sorted/sliceable by interval.
 """
-from bisect import bisect
+from bisect import bisect_left, bisect
 from copy import deepcopy
 
 class Interval(object):
@@ -120,12 +120,13 @@ class IntervalList(list):
             idx_left = min(idx for idx, _int in enumerate(self._intervals) 
                 if _int.within(interval.start))
         except ValueError:
-            idx_left = None
+            idx_left = bisect_left(self._start_timestamps, interval.start)
+
         try:
             idx_right = max(idx for idx, _int in enumerate(self._intervals) 
                 if _int.within(interval.end)) + 1
         except ValueError:
-            idx_right = None
+            idx_right = bisect(self._start_timestamps , interval.end)
         
         rv = deepcopy(self[idx_left:idx_right]) if (idx_left or idx_right) else IntervalList()
         
