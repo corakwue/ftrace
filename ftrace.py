@@ -201,9 +201,9 @@ class Ftrace(object):
         with open(self.filepath, 'rU') as f:
             num_lines = os.fstat(f.fileno()).st_size
             while True:
-                # TODO: Fix issue where for 'bindApplication\\n\\',
-                # below operation return 'bindApplicatio'
-                line = f.readline().strip().rstrip("\\n\\")
+                line = f.readline().strip()
+                if self.filetype is Filetype.SYSTRACE:
+                    line = line[:-3]
                 if self.tracer is None and 'tracer:' in line:
                     self.tracer = self._check_tracer(line)
                 if not (self.entries_in or self.entries_written) and \
