@@ -241,8 +241,12 @@ class Camera(FTraceComponent):
             last_timestamp = 0.0
             sp_events = self._trace.android.event_intervals('doStopPreviewSync')
             if not sp_events:
-                camera_task = self._trace.android.event_intervals('AndroidCamera.startPreview')[0].event.task
-                sp_events = (context for context in self._trace.android.event_intervals('disconnect') if context.event.task.pid == camera_task.pid)
+                preview_events = self._trace.android.event_intervals('AndroidCamera.startPreview')
+                if preview_events:
+                    camera_task = preview_events[0].event.task
+                    sp_events = (context for context in \
+                        self._trace.android.event_intervals('disconnect') \
+                        if context.event.task.pid == camera_task.pid)
             
             for sp_event in sp_events:
                 yield Interval(last_timestamp, sp_event.interval.start)
