@@ -85,12 +85,13 @@ class Android(FTraceComponent):
 
     @property
     @requires('tracing_mark_write')
-    def names(self):
+    def event_names(self):
         return set(self._tmw_intervals_by_name.keys())
 
     @requires('tracing_mark_write')
     @memoize
-    def event_intervals(self, name=None, task=None, interval=None):
+    def event_intervals(self, name=None, task=None, 
+                        interval=None, match_exact=True):
         """Returns event intervals for specified `name` and `task`
         Name here implies `section` or `counter` name.
         """
@@ -98,7 +99,11 @@ class Android(FTraceComponent):
             intervals = \
                 IntervalList(sorted_items(self._tmw_intervals_by_name.values()))
         else:
-            intervals = self._tmw_intervals_by_name[name]
+            if match_exact:
+                intervals = self._tmw_intervals_by_name[name]
+            else:
+                intervals = IntervalList(sorted_items(value for key, value in
+                    self._tmw_intervals_by_name.iteritems() if name in key))
 
         intervals = intervals.slice(interval=interval)
         if task:
@@ -238,6 +243,7 @@ class Android(FTraceComponent):
                 post_ir_interval = Interval(interval.end, self._trace.duration)
                 di_events = self.event_intervals(name='deliverInputEvent',
                                                  interval=post_ir_interval)
+                                                 
                 if di_events:
                     post_di_interval = Interval(di_events[0].interval.start,
                                                 self._trace.duration)
@@ -265,8 +271,6 @@ class Android(FTraceComponent):
     user-interactable window e.g. games, this excludes such intervals and
     only captures up to first displayed window.
     Typically GLSurfaces are used post-welcome screen.
-
-    TODO: Chain this to parse multiple app launch events in one trace.
     """
 
     @memoize
@@ -275,37 +279,38 @@ class Android(FTraceComponent):
         Upon launch, applications goes through 3 states:
                 -  process creation (fork from zygote)
                 -  bind application
-                -  launch (as defined in App Lifecycle on Android OS i.e. onCreate/onStart etc.)
+                -  launch (as defined in App Lifecycle on Android OS 
+                           i.e. onCreate/onStart etc.)
 
-        We guestimate which app is launched by on bindApplication logged by Android.
+        We guestimate which app is launched by on 
+        bindApplication logged by Android.
         """
-        bindApplications = self.event_intervals(name='bindApplicatio')
+        bindApplications = self.event_intervals(name='bindApplication')
         return bindApplications.slice(interval=interval)
 
     @memoize
-    def launched_app_event(self, interval=None):
+    def launched_app_events(self, interval=None):
         """
         First `bindApplication` indicates first (actual) app-launch.
         Note that any single app-launch can initiate launch of other
         processes (hence forks of zygotes and consequent `bindApplication`)
         """
-        return self._launched_app_events(interval=interval)[0].event
+        return self._launched_app_events(interval=interval)
 
     @memoize
-    def _start_launch_time(self):
+    def _start_launch_time(self, launched_event):
         """
         Start time estimated as first time we ever saw (i.e. scheduled on CPU)
         the launched task.
         """
-        event = self.launched_app_event()
-        if event:
-            interval = Interval(0, event.timestamp)
-            return self._trace.cpu.task_intervals(task=event.task,
+        if launched_event:
+            interval = Interval(0, launched_event.timestamp)
+            return self._trace.cpu.task_intervals(task=launched_event.task,
                 interval=interval)[0].interval.start
 
     @requires('tracing_mark_write')
     @memoize
-    def _end_launch_time(self):
+    def _end_launch_time(self, launched_event, next_launched_event=None):
         """
         End time estimated as last `performTraversals`(screen update) that caused
         a  `setTransactionState`.
@@ -317,31 +322,53 @@ class Android(FTraceComponent):
         layer_state_t indicates changes in position/color/depth/size/alpha/crop etc
         Display_state indicates changes in orientation, etc
         """
-        event = self.launched_app_event()
         end_time = None
+        max_end_time = self._start_launch_time(next_launched_event) \
+            if next_launched_event else self._trace.duration
         # after launch
-        pl_interval = Interval(event.timestamp, self._trace.duration)
-        performTraversals = self.event_intervals(name='performTraversals', task=event.task, interval=pl_interval)
-        for pt_event in performTraversals:
-            sts_interval = Interval(pt_event.interval.start, self._trace.duration)
-            if not self.event_intervals(name='setTransactionState', interval=sts_interval):
-                break
-            else:
-                end_time = pt_event.interval.end
+        pl_interval = Interval(launched_event.timestamp, max_end_time)
+        performTraversals = self.event_intervals(name='performTraversals', 
+                                                 task=launched_event.task, 
+                                                 interval=pl_interval,
+                                                 match_exact=False)
+        last_end = max_end_time
+        for pt_event in reversed(performTraversals):
+            sts_interval = Interval(pt_event.interval.start, last_end)
+            sts_events = self.event_intervals(name='setTransactionState', 
+                                              interval=sts_interval)
+            # ignore 'setTransactionState' due to app close/focus switch
+            # by checking 'wmUpdateFocus'
+            wmuf_events = self.event_intervals(name='wmUpdateFocus', 
+                                              interval=sts_interval)
+            if  sts_events and not wmuf_events and sts_interval.end != max_end_time:
+                end_time = sts_interval.end
+                break             
+            last_end = pt_event.interval.start
+        
         return end_time
 
 
     @requires('tracing_mark_write', 'sched_switch', 'sched_wakeup')
     @memoize
-    def app_launch_latency(self):
+    def app_launch_latencies(self, task=None):
         """Return launch latency seen in trace"""
-        start_time, end_time = \
-            self._start_launch_time(), self._end_launch_time()
-        if (start_time and end_time) is not None:
-            launch_interval = Interval(start_time, end_time)
-            return LaunchLatency(task=self.launched_app_event().task,
-                                 interval=launch_interval,
-                                 latency=launch_interval.duration)
+        launch_latencies = []
+        launched_events = list(self.launched_app_events())
+        launched_events.append(None)
+        
+        for curr_app_event, nex_app_event in zip(launched_events, launched_events[1:]):
+            event = curr_app_event.event
+            next_event = nex_app_event.event if nex_app_event else None
+            if task and event.task != task:
+                continue
+            start_time, end_time = \
+                self._start_launch_time(event), self._end_launch_time(event, next_event)
+            if (start_time and end_time) is not None:
+                launch_interval = Interval(start_time, end_time)
+                launch_latencies.append(LaunchLatency(task=event.task,
+                                        interval=launch_interval,
+                                        latency=launch_interval.duration))
+        return launch_latencies
     #---------------------------------------------------------------------------
 
     @coroutine
@@ -349,18 +376,18 @@ class Android(FTraceComponent):
         """
         """
         last_timestamp = 0.0
-        last_value = -1.0
         last_event = None
-        context_events = EventList()
+        counter_events_by_pid = defaultdict(EventList)
 
         try:
             while True:
                 event = (yield)
+                pid = event.task.pid
                 tag = event.data.atrace_tag
                 if tag is AtraceTag.CONTEXT_BEGIN:
-                    context_events.append(event)
-                elif tag is AtraceTag.CONTEXT_END and context_events:
-                    last_event = context_events.pop()
+                    counter_events_by_pid[pid].append(event)
+                elif tag is AtraceTag.CONTEXT_END and counter_events_by_pid[pid]:
+                    last_event = counter_events_by_pid[pid].pop()
                     last_timestamp = last_event.timestamp
                     last_pid, last_name = \
                         last_event.data.pid, last_event.data.section_name
@@ -373,12 +400,14 @@ class Android(FTraceComponent):
 
         except GeneratorExit:
             # close things off
-            for event in context_events:
-                last_timestamp = event.timestamp
-                interval = Interval(last_timestamp, self._trace.duration)
-                pid, name = event.data.pid, event.data.section_name
-                context = Context(pid=pid, name=name, interval=interval, event=event)
-                self._tmw_intervals_by_name[name].append(context)
+            for pid, event_list in counter_events_by_pid.iteritems():
+                for event in event_list:
+                    last_timestamp = event.timestamp
+                    interval = Interval(last_timestamp, self._trace.duration)
+                    if event.data.atrace_tag is not AtraceTag.CONTEXT_END:
+                        pid, name = event.data.pid, event.data.section_name
+                        context = Context(pid=pid, name=name, interval=interval, event=event)
+                        self._tmw_intervals_by_name[name].append(context)
 
 
     @coroutine
@@ -387,7 +416,6 @@ class Android(FTraceComponent):
         TODO: Track by cookie. This is rarely used!!!
         """
         last_timestamp = 0.0
-        last_value = -1.0
         last_event = None
         # Stack them like Jason (JSON) 'PID', then 'cookie'
         counter_events_by_cookie = defaultdict(EventList)
