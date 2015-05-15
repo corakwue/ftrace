@@ -135,15 +135,20 @@ class Android(FTraceComponent):
         self._jank_intervals_do_not_use = IntervalList()
         present_time, presented_frames = 0.0, 0.0
         
-        for vsync_event in self.event_intervals(name='VSYNC-sf', 
-                                                interval=interval):
+        vsync_events = self.event_intervals(name='VSYNC-sf', interval=interval)
+        if not vsync_events:
+            vsync_events = self.event_intervals(name='VSYNC', interval=interval)
+        
+        for vsync_event in vsync_events:
             duration = vsync_event.interval.duration
-            if duration < 2*VSYNC: # skip interval when we had nothing to do.
+            # Below required to skip interval when we had nothing to do.
+            # As this event 'toggles' every VSYNC when SurfaceFlinger has work.
+            if duration < 2*VSYNC: 
                 present_time += duration
                 temp = len(self.event_intervals('postFramebuffer', 
                                                 interval=vsync_event.interval))
                 presented_frames += temp
-                if temp == 0.0:
+                if temp == 0.0 and round(vsync_event.duration/VSYNC):
                     self._jank_intervals_do_not_use.append(vsync_event)
         
         return presented_frames/present_time
@@ -192,7 +197,7 @@ class Android(FTraceComponent):
     """
     @requires('tracing_mark_write', 'sched_switch', 'sched_wakeup')
     @memoize
-    def input_latency(self, irq_name, interval=None):
+    def input_latencies(self, irq_name, interval=None):
         """
         Returns input-to-display latencies seen in trace.
 
@@ -253,10 +258,10 @@ class Android(FTraceComponent):
     
                     if pfb_events:
                         end_ts = pfb_events[0].interval.end
-    
-                input_interval = Interval(start=start_ts, end=end_ts)
-                self._input_latencies.append(InputLatency(interval=input_interval,
-                                            latency=input_interval.duration))
+                if start_ts != end_ts:
+                    input_interval = Interval(start=start_ts, end=end_ts)
+                    self._input_latencies.append(InputLatency(interval=input_interval,
+                                                latency=input_interval.duration))
 
         return self._input_latencies
 
@@ -340,7 +345,7 @@ class Android(FTraceComponent):
             # by checking 'wmUpdateFocus'
             wmuf_events = self.event_intervals(name='wmUpdateFocus', 
                                               interval=sts_interval)
-            if  sts_events and not wmuf_events and sts_interval.end != max_end_time:
+            if sts_events and not wmuf_events and sts_interval.end != max_end_time:
                 end_time = sts_interval.end
                 break             
             last_end = pt_event.interval.start
@@ -356,9 +361,9 @@ class Android(FTraceComponent):
         launched_events = list(self.launched_app_events())
         launched_events.append(None)
         
-        for curr_app_event, nex_app_event in zip(launched_events, launched_events[1:]):
+        for curr_app_event, next_app_event in zip(launched_events, launched_events[1:]):
             event = curr_app_event.event
-            next_event = nex_app_event.event if nex_app_event else None
+            next_event = next_app_event.event if next_app_event else None
             if task and event.task != task:
                 continue
             start_time, end_time = \
