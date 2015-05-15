@@ -148,7 +148,7 @@ class Android(FTraceComponent):
                 temp = len(self.event_intervals('postFramebuffer', 
                                                 interval=vsync_event.interval))
                 presented_frames += temp
-                if temp == 0.0 and round(vsync_event.duration/VSYNC):
+                if temp == 0.0 and round(duration/VSYNC):
                     self._jank_intervals_do_not_use.append(vsync_event)
         
         return presented_frames/present_time
@@ -162,6 +162,13 @@ class Android(FTraceComponent):
         _ = self.framerate(interval=interval)
         return self._jank_intervals_do_not_use
         
+    @requires('tracing_mark_write')
+    @memoize  
+    def num_janks(self, interval=None):
+        """
+        Returns number of janks (missed frame) within interval.
+        """
+        return len(self.jank_intervals(interval=interval))
     #--------------------------------------------------------------------------
     """
     Utility script to estimate input response latency.
