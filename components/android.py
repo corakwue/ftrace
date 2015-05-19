@@ -143,15 +143,15 @@ class Android(FTraceComponent):
             duration = vsync_event.interval.duration
             # Below required to skip interval when we had nothing to do.
             # As this event 'toggles' every VSYNC when SurfaceFlinger has work.
-            if duration < 2*VSYNC: 
+            if duration != 0.0 and duration < 2*VSYNC: 
                 present_time += duration
                 temp = len(self.event_intervals('postFramebuffer', 
                                                 interval=vsync_event.interval))
                 presented_frames += temp
                 if temp == 0.0 and round(duration/VSYNC):
                     self._jank_intervals_do_not_use.append(vsync_event)
-        
-        return presented_frames/present_time
+    
+        return presented_frames/present_time if present_time != 0.0 else -1.0
 
     @requires('tracing_mark_write')
     @memoize  
@@ -223,6 +223,8 @@ class Android(FTraceComponent):
         """
         self._input_latencies = IntervalList()
         all_tasks = self._trace.cpu.task_intervals()
+        all_aq_events = self.event_intervals(name='aq:pending:', 
+                                             match_exact=False)
         touch_irqs = IntervalList(filter_by_task(
             all_tasks, 'name', irq_name, 'any'))
 
@@ -239,6 +241,8 @@ class Android(FTraceComponent):
             DI = Deliver Input [ appropriate window consumes input event ]
             SU = SurfaceFlinger Screen Update due to window handling input event
 
+            Please note InputReader 'iq' will be set to 1 whenever InputReader 
+            had event to process. This could be disabled in some systems.
             """
             last_timestamp = 0.0
             for ir_event in filter_by_task(all_tasks, 'name', 'InputReader', 'any'):
@@ -249,15 +253,54 @@ class Android(FTraceComponent):
             irqs = touch_irqs.slice(interval=interval, trimmed=False)
             # Necessary as we may be interested in different IRQ name
             if irqs:
-                # Use first input event within this interval
-                start_ts = irqs[0].interval.start
+                # Use last input event
+                #start_ts = irqs[-1].interval.start [OLD]
+                # Find closly spaced (i.e. <5ms apart) IRQ events and use first.
+                last_irq_start = None
+                for irq in reversed(irqs):
+                    irq_start = irq.interval.start
+                    if last_irq_start is None or (last_irq_start - irq_start) < 0.005:
+                        continue
+                    else:
+                        start_ts = last_irq_start
+                        break
+                    last_irq_start = irq_start
+                    
                 end_ts = start_ts
                 post_ir_interval = Interval(interval.end, self._trace.duration)
                 di_events = self.event_intervals(name='deliverInputEvent',
                                                  interval=post_ir_interval)
                                                  
                 if di_events:
-                    post_di_interval = Interval(di_events[0].interval.start,
+                    # IMPORTANT: If InputDispatcher sythesizes multiple
+                    # events to same application, we ignore consequent event
+                    # and only parse 1st event. This is because we heuristically 
+                    # can't determine start of next input event to differentiate.
+                    di_event_task = di_events[0].event.task
+                    # necessary in case a synthetic events is cancelled
+                    # canceled appropriately when the events are no longer 
+                    # being resynthesized (because the application or IME is
+                    # already handling them or dropping them entirely)
+                    # This is done by checking for dumping input latencies when 
+                    # active input event queue length (aq) is > 1 for same task.
+                    
+                    # For more details, see
+                    # https://android.googlesource.com/platform/frameworks/base.git/+
+                    # /f9e989d5f09e72f5c9a59d713521f37d3fdd93dd%5E!/
+                    
+                    # This returns first interval when aq has pending event(s)                 
+                    aq_event = filter_by_task(all_aq_events.slice(
+                                              interval=post_ir_interval),
+                                              'pid', di_event_task.pid)
+                                              
+                    if aq_event and aq_event.value > 0:
+                        post_di_start = aq_event.interval.start
+                    else:
+                        if aq_event:
+                            continue # if AQ event exists.
+                        post_di_start = di_events[0].interval.start
+                                
+                    post_di_interval = Interval(post_di_start,
                                                 self._trace.duration)
     
                     pfb_events = self.event_intervals(name='postFramebuffer',
