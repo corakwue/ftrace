@@ -29,7 +29,6 @@ from collections import namedtuple
 from ftrace.interval import Interval, IntervalList
 from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.utils.decorators import requires, memoize
-from ftrace.common import filter_by_task
 
 log = Logger('Camera')
 

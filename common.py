@@ -100,8 +100,17 @@ def filter_by_task(iterable, attr, value, how='first'):
         Name of attribute to compare.
     value : object
         Value to filter by.
+    how : string
+        Which events to return. Valid args: 'any'/'all', 'first', 'last'
     """
-    filter_func = lambda event: getattr(event.task, attr, None) == value
+    def filter_func(event):
+        try:
+            return getattr(event.task, attr, None) == value 
+        except AttributeError:
+            return getattr(event.event.task, attr, None) == value 
+        except:
+            return False
+
     filtered = ifilter(filter_func, iterable)
     rv = None
     try:
