@@ -53,3 +53,13 @@ from .clock_disable import clock_disable
 from .tsens_threshold_clear import tsens_threshold_clear
 from .tsens_threshold_hit import tsens_threshold_hit
 from .tsens_read import tsens_read
+# IRQ
+from .irq_handler_entry import irq_handler_entry
+from .irq_handler_exit import irq_handler_exit
+from .softirq_raise import softirq_raise
+from .softirq_entry import softirq_entry
+from .softirq_exit import softirq_exit
+# SYNC
+from .sync_pt import sync_pt
+from .sync_timeline import sync_timeline
+from .sync_wait import sync_wait
