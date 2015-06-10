@@ -90,7 +90,7 @@ class Android(FTraceComponent):
 
     @requires('tracing_mark_write')
     @memoize
-    def event_intervals(self, name=None, task=None, 
+    def event_intervals(self, name=None, task=None,
                         interval=None, match_exact=True):
         """Returns event intervals for specified `name` and `task`
         Name here implies `section` or `counter` name.
@@ -114,61 +114,62 @@ class Android(FTraceComponent):
     #--------------------------------------------------------------------------
     """
     Utility script to estimate Frame Rate (FPS) and Jank.
-    
+
     Jank = Interval when surfaceFlinger failed to present.
     """
     @requires('tracing_mark_write')
     @memoize
     def framerate(self, interval=None):
         """
-        Since SurfaceFlinger(SF) in Android updates the frame-buffer only 
+        Since SurfaceFlinger(SF) in Android updates the frame-buffer only
         when there's work to be done. Measuring FPS in traditional sense as
         frames / seconds would be incorrect as time might include intervals
         when no screen updates occurred.
-        
+
         To account for this, we use SF Vsync which is set to 0 when SurfaceFlinger
         has work to do. We accumulate intervals when a framebuffer was posted
         and use this as Frame-rate.
-        
+
         See https://source.android.com/devices/graphics/implement.html
         """
         self._jank_intervals_do_not_use = IntervalList()
         present_time, presented_frames = 0.0, 0.0
-        
+
         vsync_events = self.event_intervals(name='VSYNC-sf', interval=interval)
         if not vsync_events:
             vsync_events = self.event_intervals(name='VSYNC', interval=interval)
-        
+
         for vsync_event in vsync_events:
             duration = vsync_event.interval.duration
             # Below required to skip interval when we had nothing to do.
             # As this event 'toggles' every VSYNC when SurfaceFlinger has work.
-            if duration != 0.0 and duration < 2*VSYNC: 
+            if duration != 0.0 and duration < 2*VSYNC:
                 present_time += duration
-                temp = len(self.event_intervals('postFramebuffer', 
+                temp = len(self.event_intervals('postFramebuffer',
                                                 interval=vsync_event.interval))
                 presented_frames += temp
                 if temp == 0.0 and round(duration/VSYNC):
                     self._jank_intervals_do_not_use.append(vsync_event)
-    
-        return presented_frames/present_time if present_time != 0.0 else -1.0
+
+        return round(presented_frames/present_time,1) if present_time != 0.0 else -1.0
 
     @requires('tracing_mark_write')
-    @memoize  
+    @memoize
     def jank_intervals(self, interval=None):
         """
         Returns list of intervals when a jank (missed frame) occurred.
         """
         _ = self.framerate(interval=interval)
         return self._jank_intervals_do_not_use
-        
+
     @requires('tracing_mark_write')
-    @memoize  
+    @memoize
     def num_janks(self, interval=None):
         """
         Returns number of janks (missed frame) within interval.
         """
         return len(self.jank_intervals(interval=interval))
+
     #--------------------------------------------------------------------------
     """
     Utility script to estimate input response latency.
@@ -223,7 +224,7 @@ class Android(FTraceComponent):
         """
         self._input_latencies = IntervalList()
         all_tasks = self._trace.cpu.task_intervals()
-        all_aq_events = self.event_intervals(name='aq:pending:', 
+        all_aq_events = self.event_intervals(name='aq:pending:',
                                              match_exact=False)
         touch_irqs = IntervalList(filter_by_task(
             all_tasks, 'name', irq_name, 'any'))
@@ -241,7 +242,7 @@ class Android(FTraceComponent):
             DI = Deliver Input [ appropriate window consumes input event ]
             SU = SurfaceFlinger Screen Update due to window handling input event
 
-            Please note InputReader 'iq' will be set to 1 whenever InputReader 
+            Please note InputReader 'iq' will be set to 1 whenever InputReader
             had event to process. This could be disabled in some systems.
             """
             last_timestamp = 0.0
@@ -265,47 +266,47 @@ class Android(FTraceComponent):
                         start_ts = last_irq_start
                         break
                     last_irq_start = irq_start
-                    
+
                 end_ts = start_ts
                 post_ir_interval = Interval(interval.end, self._trace.duration)
                 di_events = self.event_intervals(name='deliverInputEvent',
                                                  interval=post_ir_interval)
-                                                 
+
                 if di_events:
                     # IMPORTANT: If InputDispatcher sythesizes multiple
                     # events to same application, we ignore consequent event
-                    # and only parse 1st event. This is because we heuristically 
+                    # and only parse 1st event. This is because we heuristically
                     # can't determine start of next input event to differentiate.
                     di_event_task = di_events[0].event.task
                     # necessary in case a synthetic events is cancelled
-                    # canceled appropriately when the events are no longer 
+                    # canceled appropriately when the events are no longer
                     # being resynthesized (because the application or IME is
                     # already handling them or dropping them entirely)
-                    # This is done by checking for dumping input latencies when 
+                    # This is done by checking for dumping input latencies when
                     # active input event queue length (aq) is > 1 for same task.
-                    
+
                     # For more details, see
                     # https://android.googlesource.com/platform/frameworks/base.git/+
                     # /f9e989d5f09e72f5c9a59d713521f37d3fdd93dd%5E!/
-                    
-                    # This returns first interval when aq has pending event(s)                 
+
+                    # This returns first interval when aq has pending event(s)
                     aq_event = filter_by_task(all_aq_events.slice(
                                               interval=post_ir_interval),
                                               'pid', di_event_task.pid)
-                                              
+
                     if aq_event and aq_event.value > 0:
                         post_di_start = aq_event.interval.start
                     else:
                         if aq_event:
                             continue # if AQ event exists.
                         post_di_start = di_events[0].interval.start
-                                
+
                     post_di_interval = Interval(post_di_start,
                                                 self._trace.duration)
-    
+
                     pfb_events = self.event_intervals(name='postFramebuffer',
                                                       interval=post_di_interval)
-    
+
                     if pfb_events:
                         end_ts = pfb_events[0].interval.end
                 if start_ts != end_ts:
@@ -334,10 +335,10 @@ class Android(FTraceComponent):
         Upon launch, applications goes through 3 states:
                 -  process creation (fork from zygote)
                 -  bind application
-                -  launch (as defined in App Lifecycle on Android OS 
+                -  launch (as defined in App Lifecycle on Android OS
                            i.e. onCreate/onStart etc.)
 
-        We guestimate which app is launched by on 
+        We guestimate which app is launched by on
         bindApplication logged by Android.
         """
         bindApplications = self.event_intervals(name='bindApplication')
@@ -382,24 +383,24 @@ class Android(FTraceComponent):
             if next_launched_event else self._trace.duration
         # after launch
         pl_interval = Interval(launched_event.timestamp, max_end_time)
-        performTraversals = self.event_intervals(name='performTraversals', 
-                                                 task=launched_event.task, 
+        performTraversals = self.event_intervals(name='performTraversals',
+                                                 task=launched_event.task,
                                                  interval=pl_interval,
                                                  match_exact=False)
         last_end = max_end_time
         for pt_event in reversed(performTraversals):
             sts_interval = Interval(pt_event.interval.start, last_end)
-            sts_events = self.event_intervals(name='setTransactionState', 
+            sts_events = self.event_intervals(name='setTransactionState',
                                               interval=sts_interval)
             # ignore 'setTransactionState' due to app close/focus switch
             # by checking 'wmUpdateFocus'
-            wmuf_events = self.event_intervals(name='wmUpdateFocus', 
+            wmuf_events = self.event_intervals(name='wmUpdateFocus',
                                               interval=sts_interval)
             if sts_events and not wmuf_events and sts_interval.end != max_end_time:
                 end_time = sts_interval.end
-                break             
+                break
             last_end = pt_event.interval.start
-        
+
         return end_time
 
 
@@ -410,7 +411,7 @@ class Android(FTraceComponent):
         launch_latencies = []
         launched_events = list(self.launched_app_events())
         launched_events.append(None)
-        
+
         for curr_app_event, next_app_event in zip(launched_events, launched_events[1:]):
             event = curr_app_event.event
             next_event = next_app_event.event if next_app_event else None
@@ -560,7 +561,7 @@ class Android(FTraceComponent):
         def tmw_events_gen():
             filter_func = lambda event: event.tracepoint == 'tracing_mark_write'
             for event in filter(filter_func, self._events):
-                    yield event
+                yield event
 
         for event in tmw_events_gen():
             try:
@@ -570,6 +571,9 @@ class Android(FTraceComponent):
                     self.__event_handlers[event.data.atrace_tag] = \
                         _ATRACE_TAG_HANDLERS[event.data.atrace_tag]
                # handler_func.next() # prime the coroutine
+            except AttributeError:
+                log.warn("Unsupported event: {event}".format(event=event))
+                continue
             handler_func.send(event)
 
         # shut down the coroutines (..and we are done!)

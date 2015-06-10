@@ -122,3 +122,14 @@ class Task(TaskBase):
             return int(self.name.split('/')[-1][0])
         except:
             return
+
+##normal scheduling policies
+##    range: 0
+##    (SCHED_OTHER, SCHED_IDLE, SCHED_BATCH)
+##
+##real-time policies
+##    range: 1(low) to 99(high)
+##    (SCHED_FIFO, SCHED_RR)
+##
+##PRIORITY = 20 + NICE
+##NICE : -20 (high) to (20)

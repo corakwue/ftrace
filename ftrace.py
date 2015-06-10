@@ -19,6 +19,7 @@
 #       Chuk Orakwue <chuk.orakwue@huawei.com>
 
 import os
+import sys
 import re
 import abc
 from six import with_metaclass
@@ -113,7 +114,7 @@ class Ftrace(object):
             List of tracepoints to parse - nothing more!
         """
         self.filepath = filepath
-        
+
         self._initial_tps = tracepoints if (is_list_like(tracepoints) or tracepoints is None) else [tracepoints]
         self.filetype = self._check_filetype()
 
@@ -129,7 +130,7 @@ class Ftrace(object):
         self.entries_in = 0
         self.entries_written = 0
         self.filedir, self.filename = os.path.split(self.filepath)
-        
+
         success = self._parse_file()
         if success:
             self.interval = Interval(start=0.0, end=self.duration)
@@ -170,6 +171,8 @@ class Ftrace(object):
         """
         Parse systrace lines in file.
         """
+        num_events = 0
+        log.info("Parsing file.")
         for line in self._line_gen():
             match = re.match(self._LINE_PATTERN, line)
             if match:
@@ -192,6 +195,9 @@ class Ftrace(object):
                 if self._initial_tps is None or event.tracepoint in self._initial_tps:
                     self.tracepoints.add(event.tracepoint)
                     yield event
+                    num_events +=1
+                if num_events % 5000 == 0: # Every 1000 lines, dump
+                    sys.stdout.write('.')
 
     def _line_gen(self):
         """
