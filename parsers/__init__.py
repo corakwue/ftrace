@@ -63,3 +63,5 @@ from .softirq_exit import softirq_exit
 from .sync_pt import sync_pt
 from .sync_timeline import sync_timeline
 from .sync_wait import sync_wait
+# Qualcomm's HMP
+from .sched_task_load import sched_task_load
