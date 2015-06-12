@@ -172,7 +172,7 @@ class Ftrace(object):
         Parse systrace lines in file.
         """
         num_events = 0
-        log.info("Parsing file.")
+        log.info("Parsing {filename}.".format(filename=self.filename))
         for line in self._line_gen():
             match = re.match(self._LINE_PATTERN, line)
             if match:
