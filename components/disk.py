@@ -84,7 +84,7 @@ class Disk(FTraceComponent):
         except KeyError:
             return 0.0
         except:
-            return -1.
+            return float('nan')
 
     @requires(*BLOCK_TRACEPOINTS)
     @memoize

@@ -41,7 +41,7 @@ class Interval(object):
 
     def __init__(self, start, end):
         if end < start:
-            raise ValueError("End date cannot be less than start date")
+            raise ValueError("End timestamp cannot be less than start timestamp")
         self.start, self.end = float(start), float(end)
 
     def __repr__(self):
@@ -52,7 +52,7 @@ class Interval(object):
     def duration(self):
         """Returns float"""
         return self.end - self.start
-        
+
     def within(self, timestamp):
         """Returns true if timestamp falls within interval"""
         return True if (timestamp >= self.start) and \
@@ -77,11 +77,11 @@ class IntervalList(list):
     @property
     def _start_times(self):
         return (interval.start for interval in self._intervals)
-    
+
     @property
     def _end_times(self):
         return (interval.end for interval in self._intervals)
-        
+
     @property
     def duration(self):
         """Duration of events in seconds"""
@@ -115,21 +115,21 @@ class IntervalList(list):
         """
         if interval is None:
             return self
-        
+
         try:
-            idx_left = min(idx for idx, _int in enumerate(self._intervals) 
+            idx_left = min(idx for idx, _int in enumerate(self._intervals)
                 if _int.within(interval.start))
         except ValueError:
             idx_left = bisect_left(self._start_timestamps, interval.start)
 
         try:
-            idx_right = max(idx for idx, _int in enumerate(self._intervals) 
+            idx_right = max(idx for idx, _int in enumerate(self._intervals)
                 if _int.within(interval.end)) + 1
         except ValueError:
             idx_right = bisect(self._start_timestamps , interval.end)
-        
+
         rv = deepcopy(self[idx_left:idx_right]) if (idx_left or idx_right) else IntervalList()
-        
+
         if trimmed and rv:
             for item in rv:
                 if item.interval.start < interval.start:

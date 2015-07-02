@@ -161,7 +161,6 @@ class Ftrace(object):
         """
         try:
             self.events = EventList(self._parse_lines())
-            self.duration = self.events.interval.duration
             return True
         except Exception, e:
             log.exception(e)
@@ -177,7 +176,8 @@ class Ftrace(object):
             match = re.match(self._LINE_PATTERN, line)
             if match:
                 match_dict = match.groupdict()
-                match_dict['raw_timestamp'] = match_dict['timestamp'] = float(match_dict['timestamp'])
+                match_dict['raw_timestamp'] = float(match_dict['timestamp'])
+                match_dict['timestamp'] = float(match_dict['timestamp'])
                 if self._raw_start_timestamp is None:
                     self._raw_start_timestamp = match_dict['raw_timestamp']
                 # Normalize timestamp
@@ -196,8 +196,11 @@ class Ftrace(object):
                     self.tracepoints.add(event.tracepoint)
                     yield event
                     num_events +=1
-                if num_events % 5000 == 0: # Every 1000 lines, dump
+                if num_events % 10000 == 0: # Every 10000 lines, dump
                     sys.stdout.write('.')
+                    
+        # Properly calculate duration (even if _initial_tps is used)
+        self.duration = event.timestamp
 
     def _line_gen(self):
         """

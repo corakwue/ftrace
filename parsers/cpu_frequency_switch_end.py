@@ -24,56 +24,43 @@ from .register import register_parser
 from collections import namedtuple
 #from ftrace.third_party.cnamedtuple import namedtuple
 
-TRACEPOINT = 'cluster_exit'
+TRACEPOINT = 'cpu_frequency_switch_end'
 
 
 __all__ = [TRACEPOINT]
 
-# TODO: Unpsck from bitfield to set/tuple
+# cpu_frequency_switch_end: cpu_id=0
 
-ClusterExitBase = namedtuple(TRACEPOINT,
+CpuFrequencySwitchEndBase = namedtuple(TRACEPOINT,
     [
-    'name',
-    'idx',
-    'sync', # unpack to tuple or set
-    'child', # unpack to tuple or set
-    'idle',
+    'cpu_id', # Target cpu
     ]
 )
 
-
-class ClusterExit(ClusterExitBase):
+class CpuFrequencySwitchEnd(CpuFrequencySwitchEndBase):
     __slots__ = ()
-    def __new__(cls, name, idx, sync, child, idle):
-            idx=int(idx)
-            idle=int(idle)
+    def __new__(cls, cpu_id):
+            cpu_id = int(cpu_id)
 
-            return super(cls, ClusterExit).__new__(
+            return super(cls, CpuFrequencySwitchEnd).__new__(
                 cls,
-                name=name,
-                idx=idx,
-                sync=sync,
-                child=child,
-                idle=idle,
+                cpu_id=cpu_id,
             )
 
-cluster_exit_pattern = re.compile(
-        r"""cluster_name:(?P<name>.+)\s+
-        idx:(?P<idx>\d+)\s+
-        sync:(?P<sync>\w+)\s+
-        child:(?P<child>\w+)\s+
-        idle:(?P<idle>\d+)
+cpu_frequency_switch_end_pattern = re.compile(
+        r"""
+        cpu_id=(?P<cpu_id>\d+)
         """,
         re.X|re.M
 )
 
 @register_parser
-def cluster_exit(payload):
-    """Parser for `cluster_exit` tracepoint"""
+def cpu_frequency_switch_end(payload):
+    """Parser for `cpu_frequency_switch_end` tracepoint"""
     try:
-        match = re.match(cluster_exit_pattern, payload)
+        match = re.match(cpu_frequency_switch_end_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
-            return ClusterExit(**match_group_dict)
+            return CpuFrequencySwitchEnd(**match_group_dict)
     except Exception, e:
         raise ParserError(e.message)

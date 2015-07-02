@@ -33,46 +33,46 @@ __all__ = [TRACEPOINT]
 
 BusUpdateRequestBase = namedtuple(TRACEPOINT,
     [
-    'time', 
-    'name', 
-    'index',
+    'timestamp',
+    'name',
     'src',
     'dest',
     'ab', # average bw
     'ib', # instantenous bw
+    'active',
     ]
 )
 
 class BusUpdateRequest(BusUpdateRequestBase):
     __slots__ = ()
-    def __new__(cls, time, name, index, src, dest, ab, ib):
-            time = float(time)
-            index = int(index)
+    def __new__(cls, timestamp, name, src, dest, ab, ib, active):
+            timestamp = float(timestamp)
             src = int(src)
             dest = int(dest)
             ab = float(ab)
             ib = float(ib)
+            active = int(active)
 
             return super(cls, BusUpdateRequest).__new__(
                 cls,
-                time=time,
+                timestamp=timestamp,
                 name=name,
-                index=index,
                 src=src,
                 dest=dest,
                 ab=ab,
                 ib=ib,
+                active=active,
             )
 
 bus_update_request_pattern = re.compile(
         r"""
-        time=\s+(?P<time>.+)\s+
-        name=(?P<name>.+)\s+
-        index=(?P<index>\d+)\s+
-        src=(?P<src>\d+)\s+
-        dest=(?P<dest>\d+)\s+
-        ab=(?P<ab>\d+)\s+
-        ib=(?P<ib>\d+)
+        time[=|:](?P<timestamp>.+)\s+
+        name[=|:](?P<name>.+)\s+
+        src[=|:](?P<src>\d+)\s+
+        dest[=|:](?P<dest>\d+)\s+
+        ab[=|:](?P<ab>\d+)\s+
+        ib[=|:](?P<ib>\d+)\s+
+        active[=|:](?P<active>\d+)
         """,
         re.X|re.M
 )

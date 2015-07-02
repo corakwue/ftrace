@@ -40,12 +40,14 @@ CpuIdleExitBase = namedtuple(TRACEPOINT,
 
 class CpuIdleExit(CpuIdleExitBase):
     __slots__ = ()
-    def __new__(cls, idx):
+    def __new__(cls, idx, success):
             idx = int(idx)
+            success = int(success)
 
             return super(cls, CpuIdleExit).__new__(
                 cls,
                 idx=idx,
+                success=success,
             )
 
 cpu_idle_exit_pattern = re.compile(

@@ -151,7 +151,7 @@ class Android(FTraceComponent):
                 if temp == 0.0 and round(duration/VSYNC):
                     self._jank_intervals_do_not_use.append(vsync_event)
 
-        return round(presented_frames/present_time,1) if present_time != 0.0 else -1.0
+        return round(presented_frames/present_time,1) if present_time != 0.0 else float('nan')
 
     @requires('tracing_mark_write')
     @memoize

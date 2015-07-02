@@ -72,7 +72,19 @@ class CPU(FTraceComponent):
         self._parse_rq_events()
         self._parse_freq_events()
         self._parse_cpu_idle_events()
-
+    
+    @requires('sched_switch', 'sched_wakeup')
+    @memoize
+    def seen_tasks(self, cpu=None):
+        """Return set of all tasks seen"""
+        if cpu:
+            tasks = self._tasks_by_cpu[cpu]
+        else:
+            tasks = set()
+            for _per_cpu_tasks in self._tasks_by_cpu.itervalues():
+                tasks.union(set(_per_cpu_tasks))
+        return tasks
+    
     @requires('sched_switch', 'sched_wakeup')
     @memoize
     def idle_time(self, cpu, interval=None):
@@ -93,8 +105,20 @@ class CPU(FTraceComponent):
             return 0.0
         except:
             # could be busy or idle entire time.
-            return -1
+            return float('nan')
 
+    @requires('sched_switch', 'sched_wakeup')
+    @memoize
+    def task_time(self, task, cpu=None, interval=None):
+        """Returns time for specified task for given cpu/interval (if any)"""
+        try:
+            task_intervals = self.task_intervals(cpu=cpu, task=task, interval=interval)
+            return sum(ti.interval.duration for ti in task_intervals)
+        except KeyError:
+            return 0.0
+        except:
+            return float('nan')
+    
     @requires('sched_switch', 'sched_wakeup')
     @memoize
     def busy_time(self, cpu, interval=None):
@@ -108,7 +132,7 @@ class CPU(FTraceComponent):
             return 0.0
         except:
             # could be busy or idle entire time.
-            return -1
+            return float('nan')
 
     @requires('sched_switch', 'sched_wakeup')
     def simultaneously_busy_time(self, num_cores, cpus=None, interval=None):
@@ -198,7 +222,7 @@ class CPU(FTraceComponent):
     @memoize
     def task_intervals(self, cpu=None, task=None, interval=None):
         """Returns task intervals for specified task (if any) on cpu (if any)
-        over the specified intervl (if any).
+        over the specified interval (if any).
         TODO: filter by task_state
         """
         try:
@@ -257,54 +281,108 @@ class CPU(FTraceComponent):
     def _freq_events_handler(self):
         """Handler function for CPU frequency events"""
         self._freq_intervals_by_cpu = defaultdict(IntervalList)
-        for cpu, events in self._freq_events_by_cpu.iteritems():
-            for freq_a, freq_b in zip(events, events[1:]):
-                interval = Interval(freq_a.timestamp, freq_b.timestamp)
-                freq_interval = FreqInterval(cpu=cpu,
-                                           frequency=freq_a.data.state,
-                                           interval=interval,
-                                           )
-                self._freq_intervals_by_cpu[cpu].append(freq_interval)
-            # again, we need some closure.
-            self._freq_intervals_by_cpu[cpu].append(FreqInterval(
-                                                    cpu=cpu,
-                                                    frequency=freq_b.data.state,
-                                                    interval=Interval(
-                                                        freq_b.timestamp,
-                                                        self._trace.duration
+        if not 'cpu_frequency_switch_start' in self.freq_tracepoints:
+            for cpu, events in self._freq_events_by_cpu.iteritems():
+                for freq_a, freq_b in zip(events, events[1:]):
+                    interval = Interval(freq_a.timestamp, freq_b.timestamp)
+                    freq_interval = FreqInterval(cpu=cpu,
+                                               frequency=freq_a.data.state,
+                                               interval=interval,
+                                               )
+                    self._freq_intervals_by_cpu[cpu].append(freq_interval)
+                # again, we need some closure.
+                self._freq_intervals_by_cpu[cpu].append(FreqInterval(
+                                                        cpu=cpu,
+                                                        frequency=freq_b.data.state,
+                                                        interval=Interval(
+                                                            freq_b.timestamp,
+                                                            self._trace.duration
+                                                        )
                                                     )
                                                 )
-                                            )
+        else:
+            # we have cpu_frequency_switch_start
+            for cpu, events in self._freq_events_by_cpu.iteritems():
+                last_timestamp = 0.0
+                for freq in events:
+                    interval = Interval(last_timestamp, freq.timestamp)
+                    freq_interval = FreqInterval(cpu=cpu,
+                                               frequency=freq.data.start,
+                                               interval=interval,
+                                               )
+                    self._freq_intervals_by_cpu[cpu].append(freq_interval)
+                    last_timestamp = freq.timestamp
+                # closure
+                self._freq_intervals_by_cpu[cpu].append(FreqInterval(
+                                                        cpu=cpu,
+                                                        frequency=freq.data.end,
+                                                        interval=Interval(
+                                                            last_timestamp,
+                                                            self._trace.duration
+                                                        )
+                                                    )
+                                                )
 
         return self._freq_intervals_by_cpu
 
     def _cpu_idle_events_handler(self):
         """Handler function for CPU Idle events"""
         self._cpu_idle_intervals_by_cpu = defaultdict(IntervalList)
-        for cpu, events in self._cpu_idle_events_by_cpu.iteritems():
-            last_event = None
-            for cpu_idle_a in events:
-                state = cpu_idle_a.data.state
-                if state == 4294967295 and last_event: # exit from LPM
-                    interval = Interval(last_event.timestamp, cpu_idle_a.timestamp)
-                    idle_interval = IdleInterval(cpu=cpu,
-                                                 state=last_event.data.state,
-                                                 interval=interval,
-                                                )
-                    self._cpu_idle_intervals_by_cpu[cpu].append(idle_interval)
-                last_event = cpu_idle_a
-
-            # again, we need some closure.
-            if state != 4294967295 and last_event:
-                self._cpu_idle_intervals_by_cpu[cpu].append(IdleInterval(
-                                                    cpu=cpu,
-                                                    state=last_event.data.state,
-                                                    interval=Interval(
-                                                        last_event.timestamp,
-                                                        self._trace.duration
+        if 'cpu_idle' in self.idle_tracepoints:
+            for cpu, events in self._cpu_idle_events_by_cpu.iteritems():
+                last_event = None
+                for cpu_idle_a in events:
+                    state = cpu_idle_a.data.state
+                    if state == 4294967295 and last_event and \
+                        last_event.data.state != 4294967295: # exit from LPM
+                        interval = Interval(last_event.timestamp, cpu_idle_a.timestamp)
+                        idle_interval = IdleInterval(cpu=cpu,
+                                                     state=last_event.data.state,
+                                                     interval=interval,
+                                                    )
+                        self._cpu_idle_intervals_by_cpu[cpu].append(idle_interval)
+                    last_event = cpu_idle_a
+    
+                # again, we need some closure.
+                if last_event and last_event.data.state != 4294967295L:
+                    self._cpu_idle_intervals_by_cpu[cpu].append(IdleInterval(
+                                                        cpu=cpu,
+                                                        state=last_event.data.state,
+                                                        interval=Interval(
+                                                            last_event.timestamp,
+                                                            self._trace.duration
+                                                        )
                                                     )
                                                 )
-                                            )
+        else: # Use cpu_idle_enter/exit 
+            for cpu, events in self._cpu_idle_events_by_cpu.iteritems():
+                last_event = None
+                last_timestamp = 0.0
+                for cpu_idle_a in events:
+                    tp = cpu_idle_a.tracepoint
+                    # use just exit as we may have CPU in LPM before trace started.
+                    if tp == 'cpu_idle_exit': # exit from LPM
+                        interval = Interval(last_timestamp, cpu_idle_a.timestamp)
+                        idle_interval = IdleInterval(cpu=cpu,
+                                                     state=cpu_idle_a.data.idx,
+                                                     interval=interval,
+                                                    )
+                        self._cpu_idle_intervals_by_cpu[cpu].append(idle_interval)
+                    else: # enter LPM
+                        last_timestamp = cpu_idle_a.timestamp
+                    last_event = cpu_idle_a
+    
+                # again, we need some closure.
+                if last_event and last_event.tracepoint != 'cpu_idle_exit':
+                    self._cpu_idle_intervals_by_cpu[cpu].append(IdleInterval(
+                                                        cpu=cpu,
+                                                        state=last_event.data.idx,
+                                                        interval=Interval(
+                                                            last_event.timestamp,
+                                                            self._trace.duration
+                                                        )
+                                                    )
+                                                )
 
         return self._cpu_idle_intervals_by_cpu
 
@@ -341,12 +419,14 @@ class CPU(FTraceComponent):
     def _parse_freq_events(self):
         """Parse CPU frequency intervals"""
         self._freq_events_by_cpu = defaultdict(EventList)
+        self.freq_tracepoints = set(['cpu_frequency_switch_start'])
+        if not self.freq_tracepoints.intersection(self._trace.tracepoints):
+            self.freq_tracepoints = set(['cpu_frequency'])
 
         def freq_events_gen():
-            # Best to use different tracepoint.
-            filter_func = lambda event: event.tracepoint == 'cpu_frequency'
+            filter_func = lambda event: event.tracepoint in self.freq_tracepoints
             for event in filter(filter_func, self._events):
-                    yield event
+                yield event
 
         for event in freq_events_gen():
             self._freq_events_by_cpu[event.data.cpu_id].append(event)
@@ -354,21 +434,28 @@ class CPU(FTraceComponent):
     def _parse_cpu_idle_events(self):
         """Parse CPU idle intervals"""
         self._cpu_idle_events_by_cpu = defaultdict(EventList)
-
+        self.idle_tracepoints = set(['cpu_idle_enter', 'cpu_idle_exit'])
+        if not self.idle_tracepoints.intersection(self._trace.tracepoints):
+            self.idle_tracepoints = set(['cpu_idle'])
         def cpu_idle_events_gen():
             # Best to use different tracepoint.
-            filter_func = lambda event: event.tracepoint == 'cpu_idle'
+            filter_func = lambda event: event.tracepoint in self.idle_tracepoints
             for event in filter(filter_func, self._events):
                     yield event
 
-        for event in cpu_idle_events_gen():
-            self._cpu_idle_events_by_cpu[event.data.cpu_id].append(event)
+        if 'cpu_idle' in self.idle_tracepoints:
+            for event in cpu_idle_events_gen():
+                self._cpu_idle_events_by_cpu[event.data.cpu_id].append(event)
+        else:
+            for event in cpu_idle_events_gen():
+                self._cpu_idle_events_by_cpu[event.cpu].append(event)
 
     def _parse_rq_events(self):
         """Parses CPU run-queue events"""
         self._task_intervals_by_cpu = defaultdict(IntervalList)
         self._rq_events_by_cpu = defaultdict(EventList)
         self._state_changes = EventList()
+        self._tasks_by_cpu = defaultdict(set)
 
         def sched_events_gen():
             filter_func = lambda event: event.tracepoint in ['sched_switch', 'sched_wakeup']
@@ -438,6 +525,9 @@ class CPU(FTraceComponent):
                 # idle task runs only when nothing to run.
                 runnable_tasks[cpu].clear() if next_task.pid == 0 else \
                     runnable_tasks[cpu].add(next_task)
+                    
+                self._tasks_by_cpu[cpu].add(next_task)
+                self._tasks_by_cpu[cpu].add(prev_task)
 
             elif tracepoint == 'sched_wakeup':
                 cpu = data.target_cpu
@@ -450,6 +540,8 @@ class CPU(FTraceComponent):
                 last_seen_state[cpu][task] = TaskState.RUNNABLE
                 runnable_tasks[cpu].add(task)
                 last_seen_timestamps[cpu][task] = timestamp
+                
+                self._tasks_by_cpu[cpu].add(task)
 
             num_runnable = len(runnable_tasks[cpu])
             if num_runnable != last_rq_depth[cpu] or update_running[cpu]:

@@ -30,6 +30,7 @@ notified = set()
 def requires(*tracepoints):
     """
     Decorator to warn users if tracepoint by required API is in missing in trace
+    # TODO: Keep __doc__
     """
     global msg, notified
     def wrapper(func):

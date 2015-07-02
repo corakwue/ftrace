@@ -50,7 +50,11 @@ class ClusterEnter(ClusterEnterBase):
 
             return super(cls, ClusterEnter).__new__(
                 cls,
+                name=name,
                 idx=idx,
+                sync=sync,
+                child=child,
+                idle=idle,
             )
 
 cluster_enter_pattern = re.compile(
@@ -58,7 +62,7 @@ cluster_enter_pattern = re.compile(
         idx:(?P<idx>\d+)\s+
         sync:(?P<sync>\w+)\s+
         child:(?P<child>\w+)\s+
-        idle:(?P<idle>\w+)
+        idle:(?P<idle>\d+)
         """,
         re.X|re.M
 )

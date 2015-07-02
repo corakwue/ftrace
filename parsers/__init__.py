@@ -45,6 +45,8 @@ from .cluster_exit import cluster_exit
 from .cpu_idle_enter import cpu_idle_enter
 from .cpu_idle_exit import cpu_idle_exit
 from .cpu_frequency import cpu_frequency
+from .cpu_frequency_switch_start import cpu_frequency_switch_start
+from .cpu_frequency_switch_end import cpu_frequency_switch_end
 from .cpu_idle import cpu_idle
 from .clock_set_rate import clock_set_rate
 from .clock_enable import clock_enable
