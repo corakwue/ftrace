@@ -100,7 +100,7 @@ class Clock(FTraceComponent):
             clk_intervals = IntervalList([ClkInterval(clock, ClockState.ENABLED, self._trace.interval)])
                 
         filter_func = lambda ci: ci.state is state if state else None
-        return IntervalList(filter(filter_func, clk_intervals))
+        return IntervalList(filter(filter_func, clk_intervals)).slice(interval=interval)
 
 
     def _clk_events_handler(self):
