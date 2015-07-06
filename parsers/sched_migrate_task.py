@@ -24,36 +24,39 @@ from .register import register_parser
 from collections import namedtuple
 #from ftrace.third_party.cnamedtuple import namedtuple
 
-TRACEPOINT = 'sched_migrate'
+TRACEPOINT = 'sched_migrate_task'
 
 
 __all__ = [TRACEPOINT]
 
 #
 
-SchedMigrateBase = namedtuple(TRACEPOINT,
+SchedMigrateTaskBase = namedtuple(TRACEPOINT,
     [
     'comm', # Task name
     'pid', # Process pid
     'prio', # Process priority
+    'load', # load if available
     'orig_cpu', # Orig. cpu
     'dest_cpu', # Dest. cpu
     ]
 )
 
-class SchedMigrate(SchedMigrateBase):
+class SchedMigrateTask(SchedMigrateTaskBase):
     __slots__ = ()
-    def __new__(cls, comm, pid, prio, orig_cpu, dest_cpu):
+    def __new__(cls, comm, pid, prio, orig_cpu, dest_cpu, load=None):
             pid = int(pid)
             prio = int(prio)
             orig_cpu = int(orig_cpu)
             dest_cpu = int(dest_cpu)
+            load = int(load) if load else load
 
-            return super(cls, SchedMigrate).__new__(
+            return super(cls, SchedMigrateTask).__new__(
                 cls,
                 comm=comm,
                 pid=pid,
                 prio=prio,
+                load=load,
                 orig_cpu=orig_cpu,
                 dest_cpu=dest_cpu,
             )
@@ -63,6 +66,7 @@ sched_migrate_pattern = re.compile(
         comm=(?P<comm>.+)\s+
         pid=(?P<pid>\d+)\s+
         prio=(?P<prio>\d+)\s+
+        \w*\D*(?P<load>\d*)\s*
         orig_cpu=(?P<orig_cpu>\d+)\s+
         dest_cpu=(?P<dest_cpu>\d+)
         """,
@@ -70,12 +74,12 @@ sched_migrate_pattern = re.compile(
 )
 
 @register_parser
-def sched_migrate(payload):
-    """Parser for `sched_migrate` tracepoint"""
+def sched_migrate_task(payload):
+    """Parser for `sched_migrate_task` tracepoint"""
     try:
         match = re.match(sched_migrate_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
-            return SchedMigrate(**match_group_dict)
+            return SchedMigrateTask(**match_group_dict)
     except Exception, e:
         raise ParserError(e.message)
