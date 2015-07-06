@@ -86,7 +86,7 @@ class SchedTaskLoad(SchedTaskLoadBase):
 
 sched_task_load_pattern = re.compile(
         r"""(?P<pid>\d+)\s+
-        \((?P<comm>.+)\):\s+
+        \((?P<comm>.*)\):\s+
         sum=(?P<_sum>\d+),\s+
         sum_scaled=(?P<sum_scaled>\d+),\s+
         period=(?P<period>\d+)\s+

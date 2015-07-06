@@ -60,7 +60,7 @@ class SchedWakeup(SchedWakeupBase):
 
 sched_wakeup_pattern = re.compile(
         r"""
-        comm=(?P<comm>.+)\s+
+        comm=(?P<comm>.*)\s+
         pid=(?P<pid>\d+)\s+
         prio=(?P<prio>\d+)\s+
         success=(?P<success>\d+)\s+

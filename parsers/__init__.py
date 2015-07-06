@@ -2,7 +2,7 @@ from .register import PARSERS
 # CPU
 from .sched_switch import sched_switch
 from .sched_wakeup import sched_wakeup
-from .sched_migrate import sched_migrate
+from .sched_migrate_task import sched_migrate_task
 # GPU
 from .gpu_sched_switch import gpu_sched_switch
 from .kgsl_pwr_set_state import kgsl_pwr_set_state

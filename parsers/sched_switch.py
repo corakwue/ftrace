@@ -66,12 +66,12 @@ class SchedSwitch(SchedSwitchBase):
             )
 
 sched_switch_pattern = re.compile(
-        r"""prev_comm=(?P<prev_comm>.+)\s+
+        r"""prev_comm=(?P<prev_comm>.*)\s+
         prev_pid=(?P<prev_pid>\d+)\s+
         prev_prio=(?P<prev_prio>\d+)\s+
         prev_state=(?P<prev_state>.+)\s+ # todo: handled corner cases e.g. D|W
         ==>\s+
-        next_comm=(?P<next_comm>.+)\s+
+        next_comm=(?P<next_comm>.*)\s+
         next_pid=(?P<next_pid>\d+)\s+
         next_prio=(?P<next_prio>\d+)
         """,
