@@ -76,13 +76,13 @@ class CPU(FTraceComponent):
     @requires('sched_switch', 'sched_wakeup')
     @memoize
     def seen_tasks(self, cpu=None):
-        """Return set of all tasks seen"""
-        if cpu:
-            tasks = self._tasks_by_cpu[cpu]
-        else:
-            tasks = set()
-            for _per_cpu_tasks in self._tasks_by_cpu.itervalues():
-                tasks.union(set(_per_cpu_tasks))
+        """Return iterable (list or set) of all tasks seen"""
+        if cpu is not None:
+            return self._tasks_by_cpu[cpu]
+
+        tasks = set()
+        for _per_cpu_tasks in self._tasks_by_cpu.itervalues():
+            tasks.union(set(_per_cpu_tasks))
         return tasks
     
     @requires('sched_switch', 'sched_wakeup')
@@ -215,7 +215,11 @@ class CPU(FTraceComponent):
         i.e. running or runnable
         """
         task_intervals = self.task_intervals(cpu=cpu, task=task, interval=interval)
-        filter_func = lambda ti: ti.task.pid != 0 and ti.state is TaskState.RUNNING
+        if task is None: # any non-idle task
+            filter_func = lambda ti: ti.task.pid != 0 and ti.state is TaskState.RUNNING
+        else:
+            filter_func = lambda ti: ti.state is TaskState.RUNNING
+
         return IntervalList(filter(filter_func, task_intervals))
 
     @requires('sched_switch', 'sched_wakeup')
