@@ -42,7 +42,7 @@ class Camera(FTraceComponent):
     written to the trace buffer for the camera components.
     Below tags must be enabled in trace:
 
-            gfx - Graphics
+             gfx - Graphics
            input - Input
             view - View System
               wm - Window Manager
@@ -166,7 +166,7 @@ class Camera(FTraceComponent):
             """
             Generator that yields intervals when still images are captured
             """
-            last_timestamp = 0.0
+            last_timestamp = self._trace.interval.start
             for tp_event in self._trace.android.event_intervals('doTakePictureAsync'):
                 yield Interval(last_timestamp, tp_event.interval.start)
                 last_timestamp = tp_event.interval.start
@@ -237,7 +237,7 @@ class Camera(FTraceComponent):
             """
             Generator that yields intervals when still images are captured
             """
-            last_timestamp = 0.0
+            last_timestamp = self._trace.interval.start
             sp_events = self._trace.android.event_intervals('doStopPreviewSync')
             if not sp_events:
                 preview_events = self._trace.android.event_intervals('AndroidCamera.startPreview')

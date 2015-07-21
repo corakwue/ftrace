@@ -118,7 +118,7 @@ class Disk(FTraceComponent):
     def _block_handler(self):
         """
         """
-        last_timestamp = 0.0
+        last_timestamp = self._trace.interval.start
         last_event = None
         block_issue_events_by_sector = defaultdict(list)
         block_insert_events_by_sector = defaultdict(list)

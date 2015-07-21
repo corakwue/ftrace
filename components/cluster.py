@@ -153,7 +153,7 @@ class Cluster(FTraceComponent):
             for cluster_idle in events:
                 tp = cluster_idle.tracepoint
                 if tp == 'cluster_exit':
-                    interval = Interval(last_event.timestamp if last_event else 0.0,
+                    interval = Interval(last_event.timestamp if last_event else self._trace.interval.start,
                                         cluster_idle.timestamp)
                     idle_interval = IdleInterval(cluster=cluster,
                                                  state=BusyState.IDLE,
@@ -162,7 +162,7 @@ class Cluster(FTraceComponent):
                                                 )
                     self._cluster_idle_intervals_by_cluster[cluster].append(idle_interval)
                 elif tp == 'cluster_enter':
-                    interval = Interval(last_event.timestamp if last_event else 0.0,
+                    interval = Interval(last_event.timestamp if last_event else self._trace.interval.start,
                                         cluster_idle.timestamp)
                     idle_interval = IdleInterval(cluster=cluster,
                                                  state=BusyState.BUSY,

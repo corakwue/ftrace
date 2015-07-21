@@ -41,7 +41,7 @@ class Interval(object):
 
     def __init__(self, start, end):
         if end < start:
-            raise ValueError("End timestamp cannot be less than start timestamp")
+            raise ValueError("End timestamp:{end} cannot be less than start timestamp:{start}".format(start=start, end=end))
         self.start, self.end = float(start), float(end)
 
     def __repr__(self):
