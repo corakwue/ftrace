@@ -133,7 +133,7 @@ class Ftrace(object):
 
         success = self._parse_file()
         if success:
-            self.interval = Interval(start=0.0, end=self.duration)
+            self.interval = self.events.interval
             self._initiate_apis()
 
     def __repr__(self):
@@ -188,8 +188,12 @@ class Ftrace(object):
                     match_dict['tracepoint'],
                     match_dict['data'],
                 )
-                match_dict['data'] = parsed_data
+                match_dict['data']= parsed_data
                 event = Event(**match_dict)
+                # Special treatment, adjust timestamp
+                if event.tracepoint in ('bus_update_request'):
+                    event = event._replace(data=event.data._replace(timestamp=event.data.timestamp - self._raw_start_timestamp))
+                    event = event._replace(timestamp=event.data.timestamp)
                 # add to seen cpus
                 self.seen_cpus.add(event.cpu)
                 if self._initial_tps is None or event.tracepoint in self._initial_tps:
