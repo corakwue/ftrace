@@ -1,4 +1,5 @@
 from .cpu import CPU
+from .gpu import GPU
 from .clock import Clock
 from .cluster import Cluster
 from .android import Android
