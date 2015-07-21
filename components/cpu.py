@@ -72,7 +72,7 @@ class CPU(FTraceComponent):
         self._parse_rq_events()
         self._parse_freq_events()
         self._parse_cpu_idle_events()
-    
+
     @requires('sched_switch', 'sched_wakeup')
     @memoize
     def seen_tasks(self, cpu=None):
@@ -84,12 +84,13 @@ class CPU(FTraceComponent):
         for _per_cpu_tasks in self._tasks_by_cpu.itervalues():
             tasks.union(set(_per_cpu_tasks))
         return tasks
-    
+
     @requires('sched_switch', 'sched_wakeup')
     @memoize
     def idle_time(self, cpu, interval=None):
         """Return Idle time for specified cpu [including in LPM state]"""
-        return self._trace.duration - self.busy_time(cpu=cpu, interval=interval)
+        duration = interval.duration if interval else self._trace.duration 
+        return duration - self.busy_time(cpu=cpu, interval=interval)        
 
     @requires('cpu_idle')
     @memoize
@@ -118,7 +119,7 @@ class CPU(FTraceComponent):
             return 0.0
         except:
             return float('nan')
-    
+
     @requires('sched_switch', 'sched_wakeup')
     @memoize
     def busy_time(self, cpu, interval=None):
@@ -178,7 +179,7 @@ class CPU(FTraceComponent):
         when CPU is in LPM state.
         """
         try:
-            self._cpu_idle_intervals_by_cpu
+            self._cpu_idle_intervals_by_cpu.keys()
         except AttributeError:
             _ = self._cpu_idle_events_handler()
 
@@ -346,7 +347,7 @@ class CPU(FTraceComponent):
                                                     )
                         self._cpu_idle_intervals_by_cpu[cpu].append(idle_interval)
                     last_event = cpu_idle_a
-    
+
                 # again, we need some closure.
                 if last_event and last_event.data.state != 4294967295L:
                     self._cpu_idle_intervals_by_cpu[cpu].append(IdleInterval(
@@ -358,7 +359,7 @@ class CPU(FTraceComponent):
                                                         )
                                                     )
                                                 )
-        else: # Use cpu_idle_enter/exit 
+        else: # Use cpu_idle_enter/exit
             for cpu, events in self._cpu_idle_events_by_cpu.iteritems():
                 last_event = None
                 last_timestamp = 0.0
@@ -375,7 +376,7 @@ class CPU(FTraceComponent):
                     else: # enter LPM
                         last_timestamp = cpu_idle_a.timestamp
                     last_event = cpu_idle_a
-    
+
                 # again, we need some closure.
                 if last_event and last_event.tracepoint != 'cpu_idle_exit':
                     self._cpu_idle_intervals_by_cpu[cpu].append(IdleInterval(
@@ -468,10 +469,10 @@ class CPU(FTraceComponent):
 
         runnable_tasks = defaultdict(set)
         update_running = defaultdict(lambda: False)
-        last_seen_timestamps = defaultdict(lambda: defaultdict(lambda: 0.0))
+        last_seen_timestamps = defaultdict(lambda: defaultdict(lambda: self._trace.interval.start))
         last_seen_state = defaultdict(lambda: defaultdict(lambda: TaskState.UNKNOWN))
         last_state = defaultdict(lambda: BusyState.UNKNOWN)
-        last_rq_depth = defaultdict(lambda: 0.0)
+        last_rq_depth = defaultdict(lambda: self._trace.interval.start)
         next_task_by_cpu = defaultdict(lambda: None)
 
         for event in sched_events_gen():
@@ -529,7 +530,7 @@ class CPU(FTraceComponent):
                 # idle task runs only when nothing to run.
                 runnable_tasks[cpu].clear() if next_task.pid == 0 else \
                     runnable_tasks[cpu].add(next_task)
-                    
+
                 self._tasks_by_cpu[cpu].add(next_task)
                 self._tasks_by_cpu[cpu].add(prev_task)
 
@@ -544,7 +545,7 @@ class CPU(FTraceComponent):
                 last_seen_state[cpu][task] = TaskState.RUNNABLE
                 runnable_tasks[cpu].add(task)
                 last_seen_timestamps[cpu][task] = timestamp
-                
+
                 self._tasks_by_cpu[cpu].add(task)
 
             num_runnable = len(runnable_tasks[cpu])
