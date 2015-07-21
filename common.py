@@ -25,6 +25,7 @@ import math
 import functools
 from  .third_party.enum.enum import Enum, unique
 from itertools import ifilter
+from .utils.decorators import memoize
 
 def is_list_like(arg):
     """Returns True if object is list-like, False otherwise"""
@@ -63,6 +64,15 @@ class ConstantBase(Enum):
         universe_list = cls.universe()
         universe_list.remove(items)
         return universe_list
+
+    @classmethod
+    @memoize
+    def map(cls, name):
+        """Return obj from str name"""
+        for item in cls.universe():
+            if item.name == name:
+                return item
+        return
 
 def bind_method(cls, name, func):
     """Bind method to class.
@@ -105,9 +115,9 @@ def filter_by_task(iterable, attr, value, how='first'):
     """
     def filter_func(event):
         try:
-            return getattr(event.task, attr, None) == value 
+            return getattr(event.task, attr, None) == value
         except AttributeError:
-            return getattr(event.event.task, attr, None) == value 
+            return getattr(event.event.task, attr, None) == value
         except:
             return False
 
