@@ -32,7 +32,17 @@ from ftrace.utils.decorators import requires, memoize
 
 log = Logger('Bus')
 
-BusRequestInterval = namedtuple('BusRequestInterval', ['device', 'state', 'average_bw_MBps', 'instantaneous_bw_MBps', 'interval'])
+BusRequestInterval = namedtuple('BusRequestInterval',
+[
+    'device',
+    'master_slave', # tuple of (src, dst)
+    'state', 
+    'average_bw_GBps', 
+    'instantaneous_bw_GBps', 
+    'interval'
+])
+
+AggBusRequestInterval = namedtuple('BusRequestInterval', ['votes', 'interval', 'max_voter'])
 
 class BusState(ConstantBase):
     BUSY = ()
@@ -63,7 +73,7 @@ class Bus(FTraceComponent):
 
     @requires('bus_update_request')
     @memoize
-    def bus_request_intervals(self, device, state=None, interval=None):
+    def bus_request_intervals(self, device=None, state=None, interval=None):
         """Return device interval for specified cpu & interval
         """
         try:
@@ -77,32 +87,61 @@ class Bus(FTraceComponent):
             except KeyError:
                 log.warn('No such device: {device} in {devices}'.format(
                     device=device, devices=self.names))
-            return IntervalList()
-                
+                interval = IntervalList()
         else:
-            intervals = IntervalList(sorted_items(self._bur_intervals_by_dev.values()))
+            intervals = IntervalList(sorted_items(self._bur_intervals_by_dev.values())).slice(interval=interval)
 
-        filter_func = lambda bi: bi.state is state if state else None
+        filter_func = (lambda bi: bi.state is state) if state else None
         return IntervalList(filter(filter_func, intervals))
-
+        
+        
+    @requires('bus_update_request', 'clock_set_rate')
+    @memoize
+    def bimc_aggregate_requests(self, interval=None):
+        """
+        Returns alll votes between BIMC clock changes.
+        """
+        rv = IntervalList()
+        votes = {}
+        max_voter, max_vote = '', 0
+        for bimc_interval in \
+            self._trace.clock.frequency_intervals(clock='bimc_clk', 
+                                                  interval=interval):
+            for bus_requests in self.bus_request_intervals(interval=bimc_interval.interval):
+                ib_vote = bus_requests.instantaneous_bw_GBps  
+                device = bus_requests.device +  ' ' + repr(bus_requests.master_slave)
+                votes[device] = ib_vote
+                if ib_vote > max_vote:
+                    max_voter = device
+                    max_vote = ib_vote
+            rv.append(AggBusRequestInterval(votes=votes, max_voter=max_voter,
+                                            interval=bimc_interval.interval))
+            
+        return rv
+        
     def _bur_events_handler(self):
         """Handler function for bus update request events"""
         self._bur_intervals_by_dev = defaultdict(IntervalList)
         for device, events in self._bur_events_by_dev.iteritems():
             last_event = None
             for bur_event in events:
-                interval = Interval(last_event.timestamp if last_event else 0.0,
-                                    bur_event.timestamp)
-                state=BusState.BUSY if bur_event.data.active else BusState.IDLE
+                try:
+                    interval = \
+                        Interval(last_event.timestamp if last_event else self._trace.interval.start, bur_event.timestamp)
+                except ValueError, e:
+                    raise e
+                state = \
+                    BusState.BUSY if (bur_event.data.active or \
+                        bur_event.data.ib != 0) else BusState.IDLE
                 bur_interval = BusRequestInterval(device=device,
                                              state=state,
-                                             average_bw_MBps=(bur_event.data.ab/1e6),
-                                             instantaneous_bw_MBps=(bur_event.data.ib/1e6),
+                                             master_slave=(bur_event.data.src, bur_event.data.dest),
+                                             average_bw_GBps=(bur_event.data.ab/1e9),
+                                             instantaneous_bw_GBps=(bur_event.data.ib/1e9),
                                              interval=interval,
                                             )
                 self._bur_intervals_by_dev[device].append(bur_interval)
-
-            last_event = bur_event
+                last_event = bur_event
 
             # again, we need some closure.
             if last_event:
@@ -110,8 +149,9 @@ class Bus(FTraceComponent):
                 self._bur_intervals_by_dev[device].append(BusRequestInterval(
                                                     device=device,
                                                     state=state,
-                                                    average_bw_MBps=(last_event.data.ib/1e6),
-                                                    instantaneous_bw_MBps=(last_event.data.ib/1e6),
+                                                    master_slave=(last_event.data.src, last_event.data.dest),
+                                                    average_bw_GBps=(last_event.data.ib/1e9),
+                                                    instantaneous_bw_GBps=(last_event.data.ib/1e9),
                                                     interval=Interval(
                                                         last_event.timestamp,
                                                         self._trace.duration
@@ -120,7 +160,6 @@ class Bus(FTraceComponent):
                                             )
 
         return self._bur_intervals_by_dev
-
 
     def _parse_bus_update_requests(self):
         """Parse MSM bus update requests intervals"""
