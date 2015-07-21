@@ -245,7 +245,7 @@ class Android(FTraceComponent):
             Please note InputReader 'iq' will be set to 1 whenever InputReader
             had event to process. This could be disabled in some systems.
             """
-            last_timestamp = 0.0
+            last_timestamp = self._trace.interval.start
             for ir_event in filter_by_task(all_tasks, 'name', 'InputReader', 'any'):
                 yield Interval(last_timestamp, ir_event.interval.end)
                 last_timestamp = ir_event.interval.end
@@ -431,7 +431,7 @@ class Android(FTraceComponent):
     def _context_handler(self):
         """
         """
-        last_timestamp = 0.0
+        last_timestamp = self._trace.interval.start
         last_event = None
         counter_events_by_pid = defaultdict(EventList)
 
@@ -471,7 +471,7 @@ class Android(FTraceComponent):
         """
         TODO: Track by cookie. This is rarely used!!!
         """
-        last_timestamp = 0.0
+        last_timestamp = self._trace.interval.start
         last_event = None
         # Stack them like Jason (JSON) 'PID', then 'cookie'
         counter_events_by_cookie = defaultdict(EventList)
@@ -510,7 +510,7 @@ class Android(FTraceComponent):
     def _counter_handler(self):
         """
         """
-        last_timestamp = 0.0
+        last_timestamp = self._trace.interval.start
         last_value = -1.0
         last_event = None
         # Stack them like Jason (JSON) 'PID', then 'Counter name'
