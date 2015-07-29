@@ -21,7 +21,7 @@
 from .register import register_parser
 from collections import namedtuple
 #from ftrace.third_party.cnamedtuple import namedtuple
-from ftrace.common import ConstantBase, ParserError
+from ftrace.common import ParserError
 from ftrace.atrace import AtraceTagMapping, AtraceTag
 
 TRACEPOINT = 'tracing_mark_write'
@@ -148,6 +148,8 @@ def tracing_mark_write(payload):
             return TracingMarkWriteCounter(**group_dict)
         elif atrace_tag is AtraceTag.CONTEXT_END:
             return TracingMarkWriteContextEnd(atrace_tag)
+        elif 'trace_event_clock_sync' in payload:
+            raise ParserError('Skipping trace_event_clock_sync') 
         else:
             raise ParserError('Unknown tracing_mark_write format')
     except Exception, e:
