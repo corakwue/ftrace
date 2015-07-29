@@ -21,8 +21,9 @@
 """ Interval:  Represents an interval of time defined by two timestamps.
     IntervalList: List with objects with interval, sorted/sliceable by interval.
 """
-from bisect import bisect_left, bisect
-from copy import deepcopy
+from bisect import bisect, insort
+from operator import itemgetter
+from .common import memoize
 
 class Interval(object):
     """
@@ -34,7 +35,7 @@ class Interval(object):
     start: float.
         Starting value.
     end : float
-        Ending value. Default is today in UTC, if None
+        Ending value. 
     """
 
     __slots__ = ("start", "end")
@@ -53,6 +54,7 @@ class Interval(object):
         """Returns float"""
         return self.end - self.start
 
+    @memoize
     def within(self, timestamp):
         """Returns true if timestamp falls within interval"""
         return True if (timestamp >= self.start) and \
@@ -66,31 +68,36 @@ class IntervalList(list):
     def __init__(self, iterable=None):
         self._intervals = []
         self._start_timestamps = []
+        self._end_timestamps = []
         if iterable:
             for item in iterable:
-                self.append(item)
+                if hasattr(item, 'interval'):
+                    self.append(item)
+                else:
+                    raise AttributeError('{} object has no attribute `interval`'.format(type(item)))
 
     def __repr__(self):
         return '\n'.join([item.__repr__() for item in self])
 
-
     @property
     def _start_times(self):
-        return (interval.start for interval in self._intervals)
+        return self._start_timestamps
 
     @property
     def _end_times(self):
-        return (interval.end for interval in self._intervals)
+        return self._end_timestamps
 
     @property
     def duration(self):
         """Duration of events in seconds"""
-        return max(self._end_times) - min(self._start_times)
+        return self._end_timestamps[-1] - self._start_timestamps[0]
 
     def __add_interval(self, obj):
         """Add interval to (sorted) intervals list"""
-        idx = bisect(self._start_timestamps, obj.interval.start)
-        self._start_timestamps.insert(idx, obj.interval.start)
+        start, end = obj.interval.start, obj.interval.end
+        idx = bisect(self._start_timestamps, start)
+        insort(self._end_timestamps, end)
+        self._start_timestamps.insert(idx, start) # insert into self based on start
         self._intervals.insert(idx, obj.interval)
         return idx
 
@@ -113,27 +120,23 @@ class IntervalList(list):
             Trim interval of returned list of objects to fall within specified
             interval
         """
+
         if interval is None:
             return self
+        
+        start, end = interval.start, interval.end
+        idx_left = bisect(self._start_timestamps, start)
+        idx_right = bisect(self._start_timestamps, end)
+        idx_right = None if idx_right > len(self) else idx_right
+        idx = slice(idx_left, idx_right)
+        rv = IntervalList(self[idx])
 
-        try:
-            idx_left = min(idx for idx, _int in enumerate(self._intervals)
-                if _int.within(interval.start))
-        except ValueError:
-            idx_left = bisect_left(self._start_timestamps, interval.start)
-
-        try:
-            idx_right = max(idx for idx, _int in enumerate(self._intervals)
-                if _int.within(interval.end)) + 1
-        except ValueError:
-            idx_right = bisect(self._start_timestamps , interval.end)
-
-        rv = deepcopy(self[idx_left:idx_right]) if (idx_left or idx_right) else IntervalList()
-
-        if trimmed and rv:
+        if trimmed:
             for item in rv:
-                if item.interval.start < interval.start:
-                    item.interval.start = interval.start
-                if item.interval.end > interval.end:
-                    item.interval.end = interval.end
+                i_start = item.interval.start
+                i_end = item.interval.end
+                if i_start < start:
+                    i_start = start
+                elif i_end > end:
+                    i_end = end
         return rv
