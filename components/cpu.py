@@ -28,7 +28,7 @@ from ftrace.event import EventList
 from ftrace.task import Task, TaskState
 from ftrace.ftrace import register_api, FTraceComponent
 from ftrace.composites import sorted_items
-from ftrace.common import ConstantBase
+from ftrace.common import ConstantBase, FtraceError
 from ftrace.utils.decorators import requires, memoize
 
 log = Logger('CPU')
@@ -89,8 +89,8 @@ class CPU(FTraceComponent):
     @memoize
     def idle_time(self, cpu, interval=None):
         """Return Idle time for specified cpu [including in LPM state]"""
-        duration = interval.duration if interval else self._trace.duration 
-        return duration - self.busy_time(cpu=cpu, interval=interval)        
+        duration = interval.duration if interval else self._trace.duration
+        return duration - self.busy_time(cpu=cpu, interval=interval)
 
     @requires('cpu_idle')
     @memoize
@@ -101,7 +101,7 @@ class CPU(FTraceComponent):
         """
         try:
             lpm_intervals = self.lpm_intervals(cpu=cpu, interval=interval)
-            return sum(ti.interval.duration for ti in lpm_intervals)
+            return lpm_intervals.duration
         except KeyError:
             return 0.0
         except:
@@ -114,7 +114,7 @@ class CPU(FTraceComponent):
         """Returns time for specified task for given cpu/interval (if any)"""
         try:
             task_intervals = self.task_intervals(cpu=cpu, task=task, interval=interval)
-            return sum(ti.interval.duration for ti in task_intervals)
+            return task_intervals.duration
         except KeyError:
             return 0.0
         except:
@@ -188,7 +188,7 @@ class CPU(FTraceComponent):
         else:
             intervals = IntervalList(sorted_items(self._cpu_idle_intervals_by_cpu.values()))
 
-        return intervals.slice(interval=interval)
+        return IntervalList(intervals.slice(interval=interval))
 
     @requires('sched_switch', 'sched_wakeup')
     @memoize
@@ -197,16 +197,16 @@ class CPU(FTraceComponent):
         try:
             return self._sim_busy_intervals.slice(interval=interval)
         except AttributeError:
-            return self._sim_busy_interval_handler().slice(interval=interval)
+            return IntervalList(self._sim_busy_interval_handler().slice(interval=interval))
 
     @requires('cpu_frequency')
     @memoize
     def frequency_intervals(self, cpu, interval=None):
         """Returns freq intervals for specified task on cpu"""
         try:
-            return self._freq_intervals_by_cpu[cpu].slice(interval=interval)
+            return IntervalList(self._freq_intervals_by_cpu[cpu].slice(interval=interval))
         except AttributeError:
-            return self._freq_events_handler()[cpu].slice(interval=interval)
+            return IntervalList(self._freq_events_handler()[cpu].slice(interval=interval))
 
     @requires('sched_switch', 'sched_wakeup')
     @memoize
@@ -241,8 +241,8 @@ class CPU(FTraceComponent):
             filter_func = (lambda ti: ti.task == task) if task else None
             return IntervalList(filter(filter_func,
                                        intervals.slice(interval=interval)))
-        except:
-            return IntervalList()
+        except Exception, e:
+            raise FtraceError(msg=e.message)
 
     @requires('sched_switch', 'sched_wakeup')
     @memoize
@@ -488,18 +488,9 @@ class CPU(FTraceComponent):
 
                 next_task = Task(name=data.next_comm, pid=data.next_pid, prio=data.next_prio)
                 next_task_by_cpu[cpu] = next_task
-                # Track change of next_task if we have ever seen it.
-##                if last_seen_state[next_task.pid] is not TaskState.UNKNOWN:
-##                    next_task_interval = TaskInterval(
-##                        task=next_task,
-##                        cpu=cpu,
-##                        interval=Interval(last_seen_timestamps[cpu][next_task.pid], timestamp),
-##                        state=last_seen_state[next_task.pid],
-##                    )
-##                    self._task_intervals_by_cpu[cpu].append(next_task_interval)
 
-                last_seen_timestamps[cpu][next_task] = \
-                    last_seen_timestamps[cpu][prev_task] = timestamp
+                last_seen_timestamps[cpu][next_task] = timestamp
+                last_seen_timestamps[cpu][prev_task] = timestamp
                 last_seen_state[cpu][prev_task] = data.prev_state
                 last_seen_state[cpu][next_task] = TaskState.RUNNING
                 self._task_intervals_by_cpu[cpu].append(prev_task_interval)

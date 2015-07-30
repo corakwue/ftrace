@@ -20,5 +20,5 @@
 
 
 # Required for Task Load Esimation in Qualcomm's HMP scheduler
-# check "/proc/cmdline" or
+# check "adb shell cat /proc/cmdline | grep sched_ravg_window"
 SCHED_RAVG_WINDOW = 10000000

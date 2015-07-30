@@ -21,16 +21,18 @@
 import heapq
 from .event import EventList
 from .interval import IntervalList
+from .common import FtraceError
 
 def _decorate_items(iterable):
 
     if isinstance(iterable, EventList):
         for item in iterable:
             yield (item.timestamp, item)
-    else: # assume IntervalList
+    elif isinstance(iterable, IntervalList):
         for item in iterable:
             yield (item.interval.start, item)
-
+    else:
+        raise FtraceError(msg='Unsupported iterable: {}'.format(type(iterable)))
 
 def sorted_items(iterables):
     sorted_iterable = heapq.merge(*(_decorate_items(s) for s in iterables))

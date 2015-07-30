@@ -22,7 +22,6 @@
     IntervalList: List with objects with interval, sorted/sliceable by interval.
 """
 from bisect import bisect, insort
-from operator import itemgetter
 from .common import memoize
 
 class Interval(object):
@@ -90,7 +89,7 @@ class IntervalList(list):
     @property
     def duration(self):
         """Duration of events in seconds"""
-        return self._end_timestamps[-1] - self._start_timestamps[0]
+        return sum(interval.duration for interval in self._intervals)
 
     def __add_interval(self, obj):
         """Add interval to (sorted) intervals list"""

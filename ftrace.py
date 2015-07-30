@@ -32,7 +32,6 @@ except ImportError:
     from logging import getLogger as Logger
 
 from .parsers import PARSERS
-from .interval import Interval
 from .task import Task
 from .event import Event, EventList
 from .common import (
@@ -216,7 +215,7 @@ class Ftrace(object):
             while True:
                 line = f.readline().strip()
                 if self.filetype is Filetype.SYSTRACE:
-                    line = line[:-3]
+                    line = line.rstrip() # line[:-3]
                 if self.tracer is None and 'tracer:' in line:
                     self.tracer = self._check_tracer(line)
                 if not (self.entries_in or self.entries_written) and \
@@ -243,7 +242,7 @@ class Ftrace(object):
             rv = PARSERS[tracepoint](data)
         except ParserError, e:
             log.exception(e)
-            log.warn('Error parsing {tp}'.format(tp=tracepoint))
+            log.warn('Error parsing {tp} with {data}'.format(tp=tracepoint, data=data))
         finally:
             return rv if rv else data
 

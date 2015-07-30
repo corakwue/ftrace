@@ -176,7 +176,7 @@ def unpack_bitmap(num):
     return set(idx for idx in range(bit_length) if 2**idx & num)
 
 
-class FtraceError(Exception):
+class FtraceErrorBase(Exception):
     """Base class for exceptions in this module."""
     msg = None
 
@@ -193,6 +193,15 @@ class FtraceError(Exception):
     __repr__ = __str__
 
 
-class ParserError(FtraceError):
+class FtraceError(FtraceErrorBase):
+    """
+    Generic error for APIs etc.
+    """
+    msg = "{msg}"
+    
+class ParserError(FtraceErrorBase):
+    """
+    Raised on error with parsing file.
+    """
 
     msg = """Event cannot be parsed. {msg}"""

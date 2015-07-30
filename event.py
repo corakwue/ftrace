@@ -110,9 +110,11 @@ class EventList(list):
         return self.interval.duration if self.interval else None
 
     def __add_timestamp(self, obj):
-        """Add timestamp to (sorted) timestamps list"""
-        idx = bisect(self._timestamps, obj.timestamp)
-        self._timestamps.insert(idx, obj.timestamp) # insert items sorted
+        """Insert (sorted) object with timestamp attribute to timestamps list.
+        """
+        ts = obj.timestamp
+        idx = bisect(self._timestamps, ts)
+        self._timestamps.insert(idx, ts) # insert items sorted
         return idx
 
     def append(self, obj):
@@ -137,6 +139,8 @@ class EventList(list):
         """
         if interval is None:
             return self
+        else:
+            start, end = interval.start, interval.end
 
         left_closed, right_closed = False, False
 
@@ -150,15 +154,15 @@ class EventList(list):
         else:
             raise ValueError("Closed has to be either 'left', 'right' or None")
 
-        idx_left = bisect_left(self._timestamps, interval.start)
-        idx_right = bisect(self._timestamps, interval.end)
+        idx_left = bisect_left(self._timestamps, start)
+        idx_right = bisect(self._timestamps, end)
 
-        if interval.start in self._timestamps and not left_closed:
+        if start in self._timestamps and not left_closed:
             idx_left = idx_left + 1
-        if interval.end in self._timestamps and not right_closed:
+        if end in self._timestamps and not right_closed:
             idx_right = idx_right - 1
 
         left_adjust = idx_left < len(self)
 
-        return self[idx_left:idx_right] if left_adjust else EventList()
+        return EventList(self[idx_left:idx_right]) if left_adjust else EventList()
 
