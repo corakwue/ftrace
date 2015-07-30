@@ -33,10 +33,12 @@ from ftrace.composites import sorted_items
 from ftrace.utils.decorators import requires, coroutine, memoize
 from ftrace.atrace import AtraceTag
 from ftrace.common import filter_by_task
+from six import string_types
 
 log = Logger('Android')
 
 VSYNC = float(1/60.) # 16.67ms
+UI_THREAD_DRAW_NAMES = ['performTraversals', 'Choreographer#doFrame']
 
 Context = namedtuple('Context', ['pid', 'name', 'interval', 'event'])
 Counter = namedtuple('Counter', ['pid', 'name', 'value', 'interval', 'event'])
@@ -98,16 +100,18 @@ class Android(FTraceComponent):
         if name is None:
             intervals = \
                 IntervalList(sorted_items(self._tmw_intervals_by_name.values()))
-        else:
+        elif isinstance(name, string_types):
             if match_exact:
                 intervals = self._tmw_intervals_by_name[name]
             else:
                 intervals = IntervalList(sorted_items(value for key, value in
                     self._tmw_intervals_by_name.iteritems() if name in key))
-
+        else: # assume iterable (must match exact)
+            intervals = IntervalList(sorted_items(value for key, value in
+                    self._tmw_intervals_by_name.iteritems() if key in name))
         intervals = intervals.slice(interval=interval)
         if task:
-            intervals = filter(lambda it: it.event.task == task, intervals)
+            intervals = IntervalList(filter(lambda it: it.event.task == task, intervals))
 
         return intervals
 
@@ -304,7 +308,7 @@ class Android(FTraceComponent):
                     post_di_interval = Interval(post_di_start,
                                                 self._trace.duration)
 
-                    pfb_events = self.event_intervals(name='postFramebuffer',
+                    pfb_events = self.event_intervals(name='doComposition',
                                                       interval=post_di_interval)
 
                     if pfb_events:
@@ -383,7 +387,7 @@ class Android(FTraceComponent):
             if next_launched_event else self._trace.duration
         # after launch
         pl_interval = Interval(launched_event.timestamp, max_end_time)
-        performTraversals = self.event_intervals(name='performTraversals',
+        performTraversals = self.event_intervals(name=UI_THREAD_DRAW_NAMES,
                                                  task=launched_event.task,
                                                  interval=pl_interval,
                                                  match_exact=False)
