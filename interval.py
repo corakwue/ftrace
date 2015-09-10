@@ -127,7 +127,7 @@ class IntervalList(list):
         idx_left = bisect(self._start_timestamps, start)
         idx_right = bisect(self._start_timestamps, end)
         idx_right = None if idx_right > len(self) else idx_right
-        idx = slice(idx_left, idx_right)
+        idx = slice(idx_left, idx_right) if idx_left != idx_right else slice(idx_left-1, idx_right)
         rv = IntervalList(self[idx])
 
         if trimmed:
