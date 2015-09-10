@@ -39,12 +39,17 @@ log = Logger('Android')
 
 VSYNC = float(1/60.) # 16.67ms
 UI_THREAD_DRAW_NAMES = ['performTraversals', 'Choreographer#doFrame']
+RENDER_THREAD_DRAW_NAMES = ['DrawFrame']
 
 Context = namedtuple('Context', ['pid', 'name', 'interval', 'event'])
 Counter = namedtuple('Counter', ['pid', 'name', 'value', 'interval', 'event'])
-# For app  launch latency
+# For app launch latency
 LaunchLatency = namedtuple('LaunchLatency', ['task', 'interval', 'latency'])
+# For touch & input latency
 InputLatency = namedtuple('InputLatency', ['interval', 'latency'])
+# For Rendering intervals
+Rendering = namedtuple('Rendering', ['interval'])
+
 
 @register_api('android')
 class Android(FTraceComponent):
@@ -121,6 +126,49 @@ class Android(FTraceComponent):
 
     Jank = Interval when surfaceFlinger failed to present.
     """
+    
+    def rendering_intervals(self, interval=None):
+        """
+        """
+        frames = self.frame_intervals(interval=interval)
+        rendering_intervals = IntervalList()
+        slice_start = frames[0].interval.start
+        for i, j in zip(frames[:-1], frames[1:]):
+            if j.interval.start-i.interval.end > 2*VSYNC:
+                # new group of frames.
+                ri = Rendering(interval=Interval(slice_start, i.interval.end))
+                rendering_intervals.append(ri)
+                slice_start = j.interval.start
+        return rendering_intervals
+    
+    @requires('tracing_mark_write')
+    @memoize
+    def render_frame_intervals(self, task=None, interval=None):
+        """
+        Returns intervals a frame from render thread was processed.
+        """
+        return self.event_intervals(name=RENDER_THREAD_DRAW_NAMES, task=task,
+                                    interval=interval, match_exact=False)
+
+    @requires('tracing_mark_write')
+    @memoize
+    def ui_frame_intervals(self, task=None, interval=None):
+        """
+        Returns intervals a frame from UI thread was processed.
+        """
+        return self.event_intervals(name=UI_THREAD_DRAW_NAMES, task=task,
+                                    interval=interval, match_exact=False)
+                                    
+    @requires('tracing_mark_write')
+    @memoize
+    def frame_intervals(self, task=None, interval=None):
+        """
+        Returns intervals a frame from both UI & Render threads were processed.
+        """
+        names = ['animator:'] + UI_THREAD_DRAW_NAMES + RENDER_THREAD_DRAW_NAMES
+        return self.event_intervals(name=names, task=task,
+                                    interval=interval, match_exact=False)
+
     @requires('tracing_mark_write')
     @memoize
     def framerate(self, interval=None):
@@ -173,6 +221,20 @@ class Android(FTraceComponent):
         Returns number of janks (missed frame) within interval.
         """
         return len(self.jank_intervals(interval=interval))
+        
+    @requires('tracing_mark_write')
+    @memoize
+    def jankrate(self, interval=None):
+        """
+        Returns number of janks (missed frame) per second within interval.
+        """
+        try:
+            vsync_events = self.event_intervals(name='VSYNC-sf', interval=interval)
+            if not vsync_events:
+                vsync_events = self.event_intervals(name='VSYNC', interval=interval)
+            return self.num_janks(interval=interval) / vsync_events.duration
+        except ZeroDivisionError:
+            return 0.0
 
     #--------------------------------------------------------------------------
     """
@@ -220,16 +282,25 @@ class Android(FTraceComponent):
         except AttributeError:
             return self._input_latency_handler(irq_name=irq_name).\
                         slice(interval=interval)
-
-
+    
+    @requires('tracing_mark_write')
+    @memoize
+    def input_events(self, task=None, interval=None):
+        all_inputs = self.event_intervals(name='aq:pending:', 
+                             task=task,  
+                             interval=interval, 
+                             match_exact=False)
+        
+        return IntervalList(filter(lambda input_event: input_event.value==1, 
+                                   all_inputs))
+    
     def _input_latency_handler(self, irq_name):
         """
         Returns list of all input events
         """
         self._input_latencies = IntervalList()
         all_tasks = self._trace.cpu.task_intervals()
-        all_aq_events = self.event_intervals(name='aq:pending:',
-                                             match_exact=False)
+        all_aq_events = self.input_events()
         touch_irqs = IntervalList(filter_by_task(
             all_tasks, 'name', irq_name, 'any'))
 
@@ -258,30 +329,20 @@ class Android(FTraceComponent):
             irqs = touch_irqs.slice(interval=interval, trimmed=False)
             # Necessary as we may be interested in different IRQ name
             if irqs:
-                # Use last input event
-                #start_ts = irqs[-1].interval.start [OLD]
-                # Find closly spaced (i.e. <5ms apart) IRQ events and use first.
-                last_irq_start = None
-                for irq in reversed(irqs):
-                    irq_start = irq.interval.start
-                    if last_irq_start is None or (last_irq_start - irq_start) < 0.005:
-                        continue
-                    else:
-                        start_ts = last_irq_start
-                        break
-                    last_irq_start = irq_start
+                # Use longest IRQ
+                start_ts = max(irqs, key=lambda x: x.interval.duration).interval.start
+
 
                 end_ts = start_ts
-                post_ir_interval = Interval(interval.end, self._trace.duration)
-                di_events = self.event_intervals(name='deliverInputEvent',
-                                                 interval=post_ir_interval)
+                post_ir_interval = Interval(start_ts, self._trace.duration)
+                di_events = self.event_intervals(name=['deliverInputEvent', 'input'], interval=post_ir_interval)
 
                 if di_events:
                     # IMPORTANT: If InputDispatcher sythesizes multiple
                     # events to same application, we ignore consequent event
                     # and only parse 1st event. This is because we heuristically
                     # can't determine start of next input event to differentiate.
-                    di_event_task = di_events[0].event.task
+                    di_event = di_events[0]
                     # necessary in case a synthetic events is cancelled
                     # canceled appropriately when the events are no longer
                     # being resynthesized (because the application or IME is
@@ -294,29 +355,32 @@ class Android(FTraceComponent):
                     # /f9e989d5f09e72f5c9a59d713521f37d3fdd93dd%5E!/
 
                     # This returns first interval when aq has pending event(s)
-                    aq_event = filter_by_task(all_aq_events.slice(
-                                              interval=post_ir_interval),
-                                              'pid', di_event_task.pid)
-
-                    if aq_event and aq_event.value > 0:
-                        post_di_start = aq_event.interval.start
-                    else:
-                        if aq_event:
-                            continue # if AQ event exists.
-                        post_di_start = di_events[0].interval.start
-
-                    post_di_interval = Interval(post_di_start,
-                                                self._trace.duration)
-
-                    pfb_events = self.event_intervals(name='doComposition',
-                                                      interval=post_di_interval)
-
+                    di_event_name = getattr(di_event, 'name', None)
+                    if di_event_name and di_event_name == 'input':
+                        pfb_events = self.event_intervals(name='doComposition', interval=post_ir_interval)
+                    else:  
+                        aq_event = filter_by_task(all_aq_events.slice(
+                                                  interval=post_ir_interval),
+                                                  'pid', di_event.event.task.pid)
+    
+                        if aq_event and aq_event.value > 0:
+                            post_di_start = aq_event.interval.start
+                        else:
+                            if aq_event:
+                                continue # if AQ event exists.
+                            post_di_start = di_events[0].interval.start
+    
+                        post_di_interval = Interval(post_di_start,
+                                                    self._trace.duration)
+    
+                        pfb_events = self.event_intervals(name='doComposition', interval=post_di_interval)
+                                                          
                     if pfb_events:
                         end_ts = pfb_events[0].interval.end
-                if start_ts != end_ts:
+                if start_ts != end_ts and end_ts > start_ts and start_ts not in self._input_latencies._start_timestamps:
                     input_interval = Interval(start=start_ts, end=end_ts)
                     self._input_latencies.append(InputLatency(interval=input_interval,
-                                                latency=input_interval.duration))
+                                            latency=input_interval.duration))
 
         return self._input_latencies
 
