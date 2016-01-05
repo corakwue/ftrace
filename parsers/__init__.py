@@ -3,6 +3,9 @@ from .register import PARSERS
 from .sched_switch import sched_switch
 from .sched_wakeup import sched_wakeup
 from .sched_migrate_task import sched_migrate_task
+from .cpufreq_interactive_setspeed import cpufreq_interactive_setspeed
+from .cpufreq_interactive_target import cpufreq_interactive_target
+from .cpufreq_interactive_already import cpufreq_interactive_already
 # GPU
 from .gpu_sched_switch import gpu_sched_switch
 from .kgsl_pwr_set_state import kgsl_pwr_set_state
