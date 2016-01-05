@@ -171,6 +171,22 @@ class Android(FTraceComponent):
 
     @requires('tracing_mark_write')
     @memoize
+    def present_duration(self, interval=None):
+        """
+        """
+        present_duration = 0.0
+        vsync_events = self.event_intervals(name='VSYNC-sf', interval=interval)
+        if not vsync_events:
+            vsync_events = self.event_intervals(name='VSYNC', interval=interval)
+        for vsync_event in vsync_events:
+            duration = vsync_event.interval.duration
+            if duration < 2*VSYNC:
+                present_duration += duration
+        return present_duration
+
+
+    @requires('tracing_mark_write')
+    @memoize
     def framerate(self, interval=None):
         """
         Since SurfaceFlinger(SF) in Android updates the frame-buffer only
@@ -184,26 +200,25 @@ class Android(FTraceComponent):
 
         See https://source.android.com/devices/graphics/implement.html
         """
-        self._jank_intervals_do_not_use = IntervalList()
-        present_time, presented_frames = 0.0, 0.0
+        total_frames = 0.0
 
+        # These are times when SF begins compositing.
         vsync_events = self.event_intervals(name='VSYNC-sf', interval=interval)
         if not vsync_events:
             vsync_events = self.event_intervals(name='VSYNC', interval=interval)
 
-        for vsync_event in vsync_events:
-            duration = vsync_event.interval.duration
+        for vsync_event_a, vsync_event_b in zip(vsync_events, vsync_events[1:]) :               
+            frames_presented = len(self.event_intervals('postFramebuffer', 
+                                                        interval=vsync_event_a.interval))
             # Below required to skip interval when we had nothing to do.
-            # As this event 'toggles' every VSYNC when SurfaceFlinger has work.
-            if duration != 0.0 and duration < 2*VSYNC:
-                present_time += duration
-                temp = len(self.event_intervals('postFramebuffer',
-                                                interval=vsync_event.interval))
-                presented_frames += temp
-                if temp == 0.0 and round(duration/VSYNC):
-                    self._jank_intervals_do_not_use.append(vsync_event)
-
-        return round(presented_frames/present_time,1) if present_time != 0.0 else float('nan')
+            # As this event 'toggles' every VSYNC when SurfaceFlinger has work
+            # to do. If nothing is done (i.e. no 'postFramebuffer' events)
+            # there was jank in this interval.
+            if vsync_event_a.value != vsync_event_b.value and frames_presented:
+                total_frames += frames_presented
+            
+        present_time = self.present_duration(interval=interval)
+        return round(total_frames/present_time, 1) if present_time != 0.0 else float('nan')
 
     @requires('tracing_mark_write')
     @memoize
@@ -211,8 +226,8 @@ class Android(FTraceComponent):
         """
         Returns list of intervals when a jank (missed frame) occurred.
         """
-        _ = self.framerate(interval=interval)
-        return self._jank_intervals_do_not_use
+        missedFrames = self.event_intervals('FrameMissed', interval=interval)
+        return IntervalList(filter(lambda x:x.value==1, missedFrames))
 
     @requires('tracing_mark_write')
     @memoize
@@ -229,10 +244,7 @@ class Android(FTraceComponent):
         Returns number of janks (missed frame) per second within interval.
         """
         try:
-            vsync_events = self.event_intervals(name='VSYNC-sf', interval=interval)
-            if not vsync_events:
-                vsync_events = self.event_intervals(name='VSYNC', interval=interval)
-            return self.num_janks(interval=interval) / vsync_events.duration
+            return round(self.num_janks(interval=interval) / self.present_duration(interval=interval), 1)
         except ZeroDivisionError:
             return 0.0
 
