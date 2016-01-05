@@ -50,11 +50,11 @@ class Thermal(FTraceComponent):
         self._parse_thermal_events()
 
     @property
-    @requires('tsens_read')
+    @requires('tsens_read', 'tsens_threshold_hit', 'tsens_threshold_clear')
     def names(self):
         return set(self._thermal_events_by_tsens.keys())
 
-    @requires('tsens_read')
+    @requires('tsens_read', 'tsens_threshold_hit', 'tsens_threshold_clear')
     def temp_intervals(self, tsens, interval=None):
         """Returns temp intervals for specified `tsens`.
         For list of tsens, dump `names`
@@ -80,13 +80,13 @@ class Thermal(FTraceComponent):
                 if tracepoint == 'tsens_threshold_hit':
                     current_threshold = True
                 elif tracepoint == 'tsens_threshold_clear':
-                    current_threshold = False   
+                    current_threshold = False
                 # update when temperature or threshold state changes.
                 if current_temp != last_temp or \
                     current_threshold != last_threshold:
                     interval = Interval(last_timestamp, thermal_event.timestamp)
-                
-                    thermal_interval = ThermalInterval(tsens, last_temp, 
+
+                    thermal_interval = ThermalInterval(tsens, last_temp,
                                                        interval, last_threshold)
                     self._thermal_intervals_by_tsens[tsens].append(thermal_interval)
                 last_temp = current_temp
