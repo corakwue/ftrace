@@ -30,7 +30,7 @@ UX analysis (application launch time), HMP usage and much more. To get started, 
 
 ### Loading a trace file.
 ```python
-trace = Ftrace(r'C:\Users\c00759961\Documents\trace.html')
+trace = Ftrace(r'/some/path/to/trace.html')
 # how long is this trace (in seconds)
 print trace.interval
 print trace.duration
