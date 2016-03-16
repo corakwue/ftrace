@@ -88,3 +88,11 @@ from .sync_timeline import sync_timeline
 from .sync_wait import sync_wait
 # Qualcomm's HMP
 from .sched_task_load import sched_task_load
+# Linaro/ARM's HMP
+from .sched_hmp_migrate import sched_hmp_migrate
+from .sched_rq_nr_running import sched_rq_nr_running
+from .sched_rq_runnable_load import sched_rq_runnable_load
+from .sched_rq_runnable_ratio import sched_rq_runnable_ratio
+from .sched_task_load_contrib import sched_task_load_contrib
+from .sched_task_runnable_ratio import sched_task_runnable_ratio
+from .sched_task_usage_ratio import sched_task_usage_ratio
