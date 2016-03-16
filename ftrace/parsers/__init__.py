@@ -96,3 +96,9 @@ from .sched_rq_runnable_ratio import sched_rq_runnable_ratio
 from .sched_task_load_contrib import sched_task_load_contrib
 from .sched_task_runnable_ratio import sched_task_runnable_ratio
 from .sched_task_usage_ratio import sched_task_usage_ratio
+# Linaro/ARM's EAS work
+from .cpu_capacity import cpu_capacity
+from .sched_boost_cpu import sched_boost_cpu
+from .sched_contrib_scale_f import sched_contrib_scale_f
+from .sched_load_avg_task import sched_load_avg_task
+from .sched_load_avg_cpu import sched_load_avg_cpu
