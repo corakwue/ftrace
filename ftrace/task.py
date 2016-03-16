@@ -104,6 +104,10 @@ class Task(TaskBase):
         )
 
     def __eq__(self, other):
+        """
+        Compare by PID only. Prority is subject to change (dynamically)
+        as is task name (post-fork).
+        """
         if isinstance(other, Task):
             return True if other.pid == self.pid else False
         elif isinstance(other, integer_types):
