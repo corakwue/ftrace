@@ -29,15 +29,23 @@ class HMPMigrate(ConstantBase):
 ##    To choose between big and LITTLE cores, the ARM MP solution uses the
 ##    tracked load history of a task.
 
-    WAKEUP = ()
+    WAKE = ()
 
 ##    Fork migration operates when the fork system call is used to ceate a new
 ##    software thread. At this point, clearly no historical load
-##    information is available ? the thread is new.
+##    information is available the thread is new.
 ##    The system defaults to a big core for new threads on the assumption that
-##    a ?light? thread will quickly migrate down to a LITTLE core as a result
+##    a "light" thread will quickly migrate down to a LITTLE core as a result
 ##    of wake migration
-    FORCE = ()
+
+    FORK = ()
+
+##    Forced migration deals with the problem of long running software threads
+##    which do not sleep, or do not sleep very often. Periodically the scheduler
+##    checks the current thread running on each LITTLE core. If its tracked load
+##    exceeds the upmigration threshold the task is transfered to a big core.
+
+    FORCED = () ## UP-MIGRATE THRESHOLD
 
 ##    The big.LITTLE MP solution requires that normal scheduler
 ##    load balancing be disabled. The downside of this is that long-running
@@ -58,7 +66,8 @@ class HMPMigrate(ConstantBase):
 ##    Such a task can then be immediately migrated to the idle big core.
 ##    If no suitable task is found, then the big core can be powered down.
 
-    IDLE_PULL = ()
+    IDLE_PULL = () ## LITTLE ==> BIG
+
 
 ## What is this?
     UNKNOWN = ()
@@ -67,10 +76,11 @@ class HMPMigrate(ConstantBase):
 # /trace/events/sched.h
 HMPMigrateMapping = defaultdict(lambda: HMPMigrate.UNKNOWN)
 state_dict = {
-    0 : HMPMigrate.WAKEUP,
-    1 : HMPMigrate.FORCE,
+    0 : HMPMigrate.WAKE,
+    1 : HMPMigrate.FORCED,
     2 : HMPMigrate.OFFLOAD,
     3 : HMPMigrate.IDLE_PULL,
+    # fork not mapped, new thread use the big core!
 }
 
 HMPMigrateMapping.update(state_dict)
