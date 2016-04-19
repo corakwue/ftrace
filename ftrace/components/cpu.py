@@ -82,7 +82,7 @@ class CPU(FTraceComponent):
 
         tasks = set()
         for _per_cpu_tasks in self._tasks_by_cpu.itervalues():
-            tasks.union(set(_per_cpu_tasks))
+            tasks = tasks.union(set(_per_cpu_tasks))
         return tasks
 
     @requires('sched_switch', 'sched_wakeup')
@@ -270,11 +270,12 @@ class CPU(FTraceComponent):
                                               )
                 yield rq_interval
             # let's get some closure.
-            yield RunQueueInterval(cpu=cpu,
-                                   runnable=rq_b.runnable,
-                                   running=rq_b.running,
-                                   interval=Interval(rq_b.timestamp, self._trace.duration),
-                                  )
+            if self._rq_events_by_cpu[cpu]:
+                yield RunQueueInterval(cpu=cpu,
+                                       runnable=rq_b.runnable,
+                                       running=rq_b.running,
+                                       interval=Interval(rq_b.timestamp, self._trace.duration),
+                                      )
         self._rq_intervals_by_cpu = defaultdict(IntervalList)
 
         for cpu in self._trace.seen_cpus:
@@ -477,24 +478,37 @@ class CPU(FTraceComponent):
 
         for event in sched_events_gen():
             tracepoint, timestamp, data = event.tracepoint, event.timestamp, event.data
-
+            
             if tracepoint == 'sched_switch':
                 cpu = event.cpu
                 prev_task = Task(name=data.prev_comm, pid=data.prev_pid, prio=data.prev_prio)
-                # Getting descheduled
+                # Getting descheduled (fix: note correct state in task_intervals)
+                prev_task_state = TaskState.RUNNING # last_seen_state[cpu][prev_task]
                 prev_task_interval = TaskInterval(task=prev_task, cpu=cpu,
-                    interval=Interval(last_seen_timestamps[cpu][prev_task.pid], timestamp),
-                    state=TaskState.RUNNING)
+                    interval=Interval(last_seen_timestamps[cpu][prev_task], timestamp),
+                    state=prev_task_state)
 
-                next_task = Task(name=data.next_comm, pid=data.next_pid, prio=data.next_prio)
+                next_task = Task(name=data.next_comm, pid=data.next_pid, 
+                                 prio=data.next_prio)
                 next_task_by_cpu[cpu] = next_task
+                
+                next_task_interval = TaskInterval(task=next_task, cpu=cpu, 
+                    interval=Interval(last_seen_timestamps[cpu][next_task], timestamp), 
+                    state=last_seen_state[cpu][next_task])
 
+                self._task_intervals_by_cpu[cpu].append(prev_task_interval)
+                self._task_intervals_by_cpu[cpu].append(next_task_interval)
+                
+                adjusted_runstate = data.prev_state
+                if adjusted_runstate in (TaskState.RUNNING, TaskState.RUNNABLE):
+                    adjusted_runstate = TaskState.RUNNABLE
+                # helps track when things are running/runnable and dequeued
+                # in task_intervals
                 last_seen_timestamps[cpu][next_task] = timestamp
                 last_seen_timestamps[cpu][prev_task] = timestamp
-                last_seen_state[cpu][prev_task] = data.prev_state
+                last_seen_state[cpu][prev_task] = adjusted_runstate
                 last_seen_state[cpu][next_task] = TaskState.RUNNING
-                self._task_intervals_by_cpu[cpu].append(prev_task_interval)
-
+                
                 # track state changes
                 if next_task.pid == 0:
                     current_state = BusyState.IDLE
@@ -510,7 +524,7 @@ class CPU(FTraceComponent):
                     update_running[cpu] = True
 
                 # Track runnable tasks
-                if data.prev_state is TaskState.RUNNABLE:
+                if adjusted_runstate is TaskState.RUNNABLE:
                     runnable_tasks[cpu].add(prev_task)
                 else:
                     try:
@@ -521,23 +535,49 @@ class CPU(FTraceComponent):
                 # idle task runs only when nothing to run.
                 runnable_tasks[cpu].clear() if next_task.pid == 0 else \
                     runnable_tasks[cpu].add(next_task)
-
+                # useful to track seen tasks
                 self._tasks_by_cpu[cpu].add(next_task)
                 self._tasks_by_cpu[cpu].add(prev_task)
 
             elif tracepoint == 'sched_wakeup':
-                cpu = data.target_cpu
+                target_cpu = data.target_cpu
+                cpu = event.cpu
                 # When a task wakeup occurs, its placed on run-queue (RQ)
                 # but may not be RUNNING right-away (depending on priority)
                 # during this time & if anything is runnable
                 task = Task(name=data.comm, pid=data.pid, prio=data.prio)
                 # woken-up task can run right-away if nothing is on queue.
                 # we handle this later.
-                last_seen_state[cpu][task] = TaskState.RUNNABLE
-                runnable_tasks[cpu].add(task)
-                last_seen_timestamps[cpu][task] = timestamp
+                
+                # first we note last seen state on cpu it was last seen
+                # since this tracepoint can occur in context of any cpu, 
+                # we simply have to do a search to find where this was running
+                last_seen_cpu = None
+                for _cpu in last_seen_timestamps.keys():
+                    if last_seen_timestamps[_cpu][task] != 0.0:
+                        last_seen_cpu = _cpu
+                        break
+                if last_seen_cpu is not None:
+                    prev_task_state = last_seen_state[last_seen_cpu][task]
+                    prev_task_interval = TaskInterval(task=task, cpu=last_seen_cpu,
+                        interval=Interval(last_seen_timestamps[last_seen_cpu][task], timestamp),
+                        state=prev_task_state)
+                    self._task_intervals_by_cpu[last_seen_cpu].append(prev_task_interval)
+                    last_seen_timestamps[last_seen_cpu][task] = timestamp
+                else:
+                    pass #oh no, likely first time queued or traced
+                    
+                last_seen_state[target_cpu][task] = TaskState.TASK_WAKING
+                runnable_tasks[target_cpu].add(task)
+                try:
+                    runnable_tasks[last_seen_cpu].remove(task)
+                    
+                except KeyError:
+                    pass
+                if data.success: # most likely true
+                    last_seen_timestamps[target_cpu][task] = timestamp
+                    self._tasks_by_cpu[target_cpu].add(task)
 
-                self._tasks_by_cpu[cpu].add(task)
 
             num_runnable = len(runnable_tasks[cpu])
             if num_runnable != last_rq_depth[cpu] or update_running[cpu]:
