@@ -27,48 +27,64 @@ except ImportError:
     from collections import namedtuple
 
 
-TRACEPOINT = 'sched_load_avg_cpu'
+TRACEPOINT = 'cpufreq_sched_update_capacity'
 
 __all__ = [TRACEPOINT]
 
-SchedLoadAvgCpuBase = namedtuple(TRACEPOINT,
+CpufreqSchedUpdateCapacityBase = namedtuple(TRACEPOINT,
     [
     'cpu'
-    'load_avg',
-    'util_avg'
+    'request',
+    'cfs', # fair tasks
+    'rt', # real-time
+    'dl',
+    'total',
+    'new_total',
     ]
 )
 
-class SchedLoadAvgCpu(SchedLoadAvgCpuBase):
+class CpufreqSchedUpdateCapacity(CpufreqSchedUpdateCapacityBase):
     __slots__ = ()
-    def __new__(cls, cpu, load_avg, util_avg):
+    def __new__(cls, cpu, request, cfs, rt, dl, total, new_total):
             cpu = int(cpu)
-            load_avg = int(load_avg)
-            util_avg = int(util_avg)
+            request = bool(request)
+            cfs = int(cfs)
+            rt = int(rt)
+            dl = int(dl)
+            total = int(total)
+            new_total = int(new_total)
 
-            return super(cls, SchedLoadAvgCpu).__new__(
+            return super(cls, CpufreqSchedUpdateCapacity).__new__(
                 cls,
                 cpu=cpu,
-                load_avg=load_avg,
-                util_avg=util_avg,
+                request=request,
+                cfs=cfs,
+                rt=rt,
+                dl=dl,
+                total=total,
+                new_total=new_total
             )
 
-sched_load_avg_cpu_pattern = re.compile(
+cpufreq_sched_update_capacity_pattern = re.compile(
         r"""
         cpu=(?P<cpu>\d+)\s+
-        load_avg=(?P<load_avg>\d+)\s+
-        util_avg=(?P<util_avg>\d+)
+        set_cap=(?P<request>\d+)\s+
+        cfs=(?P<cfs>\d+)\s+
+        rt=(?P<rt>\d+)\s+
+        dl=(?P<dl>\d+)\s+
+        old_tot=(?P<total>\d+)\s+
+        new_tot=(?P<new_total>\d+)
         """,
         re.X|re.M
 )
 
 @register_parser
-def sched_load_avg_cpu(payload):
-    """Parser for `sched_load_avg_cpu` tracepoint"""
+def cpufreq_sched_update_capacity(payload):
+    """Parser for `cpufreq_sched_update_capacity` tracepoint"""
     try:
-        match = re.match(sched_load_avg_cpu_pattern, payload)
+        match = re.match(cpufreq_sched_update_capacity_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
-            return SchedLoadAvgCpu(**match_group_dict)
+            return CpufreqSchedUpdateCapacity(**match_group_dict)
     except Exception, e:
         raise ParserError(e.message)

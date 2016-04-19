@@ -56,7 +56,6 @@ class TaskState(ConstantBase):
     # based on sched_wakeup
     RUNNABLE = ()
 
-
 # linux/sched.h
 # /trace/events/sched.h
 TaskStateMapping = defaultdict(lambda: TaskState.UNKNOWN)

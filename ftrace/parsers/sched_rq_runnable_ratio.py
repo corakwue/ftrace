@@ -49,18 +49,13 @@ class SchedRQRunnableRatio(SchedRQRunnableRatioBase):
     __slots__ = ()
     def __new__(cls, cpu, ratio):
             cpu = int(cpu)
-            ratio = float(ratio)
+            ratio = float(self.ratio)/1023.0
 
             return super(cls, SchedRQRunnableRatio).__new__(
                 cls,
                 cpu=cpu,
                 ratio=ratio,
             )
-
-    @property
-    def normalized_ratio(self):
-        ""
-        return float(self.ratio)/1023.0
 
 sched_rq_runnable_ratio_pattern = re.compile(
         r"""cpu=(?P<cpu>\d+)\s+

@@ -56,7 +56,7 @@ class SchedHMPMigrate(SchedHMPMigrateBase):
                 force=force,
             )
 
-sched_migrate_pattern = re.compile(
+sched_hmp_migrate_pattern = re.compile(
         r"""
         comm=(?P<comm>.+)\s+
         pid=(?P<pid>\d+)\s+
@@ -70,7 +70,7 @@ sched_migrate_pattern = re.compile(
 def sched_hmp_migrate(payload):
     """Parser for `sched_hmp_migrate` tracepoint"""
     try:
-        match = re.match(sched_migrate_pattern, payload)
+        match = re.match(sched_hmp_migrate_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
             match_group_dict['force'] = HMPMigrateMapping[int(match_group_dict['force'])]

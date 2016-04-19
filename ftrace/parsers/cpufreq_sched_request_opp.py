@@ -21,56 +21,57 @@
 import re
 from ftrace.common import ParserError
 from .register import register_parser
-
 try:
     from ftrace.third_party.cnamedtuple import namedtuple
 except ImportError:
     from collections import namedtuple
 
 
-TRACEPOINT = 'sched_task_load_contrib'
-
+TRACEPOINT = 'cpufreq_sched_request_opp'
 
 __all__ = [TRACEPOINT]
 
-
-SchedTaskLoadContribBase = namedtuple(TRACEPOINT,
+CpufreqSchedRequestOppBase = namedtuple(TRACEPOINT,
     [
-    'comm',
-    'pid',
-    'load_contrib'
+    'cpu'
+    'capacity',
+    'freq_new',
+    'requested_freq'
     ]
 )
 
-
-class SchedTaskLoadContrib(SchedTaskLoadContribBase):
+class CpufreqSchedRequestOpp(CpufreqSchedRequestOppBase):
     __slots__ = ()
-    def __new__(cls, comm, pid, load_contrib):
-            pid = int(pid)
-            load_contrib = float(load_contrib)/1023.
+    def __new__(cls, cpu, capacity, freq_new, requested_freq):
+            cpu = int(cpu)
+            capacity = int(capacity)
+            freq_new = int(freq_new)
+            requested_freq = int(requested_freq)
 
-            return super(cls, SchedTaskLoadContrib).__new__(
+            return super(cls, CpufreqSchedRequestOpp).__new__(
                 cls,
-                comm=comm,
-                pid=pid,
-                load_contrib=load_contrib,
+                cpu=cpu,
+                capacity=capacity,
+                freq_new=freq_new,
+                requested_freq=requested_freq,
             )
 
-sched_task_load_contrib_pattern = re.compile(
-        r"""comm=(?P<comm>.*)\s+
-        pid=(?P<pid>\d+)\s+
-        load_contrib=(?P<load_contrib>\d+)\s+
+cpufreq_sched_request_opp_pattern = re.compile(
+        r"""
+        cpu (?P<cpu>\d+)\s+
+        cap change, cluster cap request (?P<capacity>\d+)\s+
+        => OPP (?P<freq_new>\d+) \(cur (?P<requested_freq>\d+)
         """,
         re.X|re.M
 )
 
 @register_parser
-def sched_task_load_contrib(payload):
-    """Parser for `sched_task_load_contrib` tracepoint"""
+def cpufreq_sched_request_opp(payload):
+    """Parser for `cpufreq_sched_request_opp` tracepoint"""
     try:
-        match = re.match(sched_task_load_contrib_pattern, payload)
+        match = re.match(cpufreq_sched_request_opp_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
-            return SchedTaskLoadContrib(**match_group_dict)
+            return CpufreqSchedRequestOpp(**match_group_dict)
     except Exception, e:
         raise ParserError(e.message)

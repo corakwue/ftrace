@@ -47,7 +47,7 @@ class SchedTaskRunnableRatio(SchedTaskRunnableRatioBase):
     __slots__ = ()
     def __new__(cls, comm, pid, ratio):
             pid = int(pid)
-            ratio = float(ratio)
+            ratio = float(ratio)/1023.
 
             return super(cls, SchedTaskRunnableRatio).__new__(
                 cls,

@@ -50,7 +50,7 @@ class SchedTaskUsageRatio(SchedTaskUsageRatioBase):
     __slots__ = ()
     def __new__(cls, comm, pid, ratio):
             pid = int(pid)
-            ratio = float(ratio)
+            ratio = float(self.ratio)/1023.0
 
             return super(cls, SchedTaskUsageRatio).__new__(
                 cls,
@@ -58,11 +58,6 @@ class SchedTaskUsageRatio(SchedTaskUsageRatioBase):
                 pid=pid,
                 ratio=ratio,
             )
-
-    @property
-    def normalized_load(self):
-        ""
-        return float(self.ratio)/1023.0
 
 sched_task_usage_ratio_pattern = re.compile(
         r"""comm=(?P<comm>.*)\s+
