@@ -34,7 +34,7 @@ class Interval(object):
     start: float.
         Starting value.
     end : float
-        Ending value. 
+        Ending value.
     """
 
     __slots__ = ("start", "end")
@@ -64,6 +64,7 @@ class IntervalList(list):
     """
     List with objects with intervals, sorted and sliceable by interval.
     """
+    
     def __init__(self, iterable=None):
         self._intervals = []
         self._start_timestamps = []
@@ -119,23 +120,30 @@ class IntervalList(list):
             Trim interval of returned list of objects to fall within specified
             interval
         """
-
         if interval is None:
             return self
-        
+
         start, end = interval.start, interval.end
         idx_left = bisect(self._start_timestamps, start)
         idx_right = bisect(self._start_timestamps, end)
+        idx_left = idx_left - 1 if idx_left >= len(self) else idx_left
         idx_right = None if idx_right > len(self) else idx_right
-        idx = slice(idx_left, idx_right)
-        rv = IntervalList(self[idx])
+        idx = slice(idx_left, idx_right) if idx_left != idx_right else slice(idx_left - 1, idx_left)
 
-        if trimmed:
-            for item in rv:
-                i_start = item.interval.start
-                i_end = item.interval.end
-                if i_start < start:
-                    i_start = start
-                elif i_end > end:
-                    i_end = end
+        ll = self[idx]
+        rv = IntervalList()
+        
+        if trimmed and len(ll):
+            for item in ll:
+                trim = False
+                item_start, item_end = item.interval.start, item.interval.end
+                if item_start < start:
+                    trim, item_start = True, start
+                if item_end > end:
+                    trim, item_end = True, end
+                if trim:
+                    rv.append(item._replace(interval=Interval(item_start, item_end)))
+                else:
+                    rv.append(item)
+
         return rv
