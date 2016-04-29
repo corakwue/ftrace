@@ -11,7 +11,7 @@ from ftrace import Interval
 #trace.gpu.lpm_time(interval=it, state=ftrace.gpu.BusyState.SLUMBER)/it.duration
 
 # processing scripts for each file in directory
-trace = Ftrace(r'C:\Users\c00759961\Documents\systrace\Angry_Birds_Mate8.html', ('sched_hmp_migrate', 'sched_migrate_task'))
+trace = Ftrace(r'C:\Users\c00759961\Documents\systrace\Baidu_scroll.html')
 #print trace.android.framerate()
 #print trace.gpu.frequency_intervals(interval=it) # trace.clock.frequency_intervals(clock='oxili_gfx3d_clk', interval=it)
 #trace.bus.bimc_aggregate_requests(interval=it)
@@ -69,4 +69,4 @@ trace = Ftrace(r'C:\Users\c00759961\Documents\systrace\Angry_Birds_Mate8.html', 
 #ddd[2961] = []
 #for event in filter(lambda x: x.tracepoint == 'sched_task_load' and x.task.pid in [3239, 2961], trace.events):
 #    ddd[event.task.pid].append(event.data.demand/10e6)
-#
+#    
