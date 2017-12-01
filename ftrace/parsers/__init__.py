@@ -102,3 +102,5 @@ from .sched_boost_cpu import sched_boost_cpu
 from .sched_contrib_scale_f import sched_contrib_scale_f
 from .sched_load_avg_task import sched_load_avg_task
 from .sched_load_avg_cpu import sched_load_avg_cpu
+# Android binder
+from .binder_ioctl import binder_ioctl
