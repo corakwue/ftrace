@@ -109,3 +109,4 @@ from .binder_lock import binder_lock
 from .binder_unlock import binder_unlock
 from .binder_locked import binder_locked
 from .binder_command import binder_command
+from .binder_wait_for_work import binder_wait_for_work
