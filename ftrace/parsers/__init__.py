@@ -108,3 +108,4 @@ from .binder_return import binder_return
 from .binder_lock import binder_lock
 from .binder_unlock import binder_unlock
 from .binder_locked import binder_locked
+from .binder_command import binder_command
