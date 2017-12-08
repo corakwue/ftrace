@@ -13,20 +13,22 @@ __all__ = [TRACEPOINT]
 BinderReturnBase = namedtuple(TRACEPOINT,
     [
     'cmd',
-    'rv',
+    'mode',
+    'result',
     ]
 )
 
 class BinderReturn(BinderReturnBase):
     __slots__ = ()
-    def __new__(cls, cmd, rv):
+    def __new__(cls, cmd, result):
 
-            cmd = parse_binder_cmd (int (cmd, base=16))
+            (cmd, mode) = parse_binder_cmd (int (cmd, base=16))
 
             return super(cls, BinderReturn).__new__(
                 cls,
                 cmd=cmd,
-                rv=rv
+                mode=mode,
+                result=result
             )
 
 binder_ioctl_pattern = re.compile(

@@ -13,6 +13,7 @@ __all__ = [TRACEPOINT]
 BinderIoctlBase = namedtuple(TRACEPOINT,
     [
     'cmd',
+    'mode',
     'arg',
     ]
 )
@@ -21,12 +22,13 @@ class BinderIoctl(BinderIoctlBase):
     __slots__ = ()
     def __new__(cls, cmd, arg):
 
-            cmd = parse_binder_cmd (int(cmd, base=16))
+            (cmd, mode) = parse_binder_cmd (int(cmd, base=16))
             arg = int(arg, base=16)
 
             return super(cls, BinderIoctl).__new__(
                 cls,
                 cmd=cmd,
+                mode=mode,
                 arg=hex(arg),
             )
 
