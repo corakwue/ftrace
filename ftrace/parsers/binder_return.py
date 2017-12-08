@@ -4,47 +4,46 @@ from .register import register_parser
 from .binder import parse_binder_cmd
 from collections import namedtuple
 
-TRACEPOINT = 'binder_ioctl'
+TRACEPOINT = 'binder_return'
 
 __all__ = [TRACEPOINT]
 
-#binder_ioctl: cmd=0xc0186201 arg=0xbea7dc28
+#binder_return: cmd=0x80287203 BR_REPLY
 
-BinderIoctlBase = namedtuple(TRACEPOINT,
+BinderReturnBase = namedtuple(TRACEPOINT,
     [
     'cmd',
-    'arg',
+    'rv',
     ]
 )
 
-class BinderIoctl(BinderIoctlBase):
+class BinderReturn(BinderReturnBase):
     __slots__ = ()
-    def __new__(cls, cmd, arg):
+    def __new__(cls, cmd, rv):
 
-            cmd = parse_binder_cmd (int(cmd, base=16))
-            arg = int(arg, base=16)
+            cmd = parse_binder_cmd (int (cmd, base=16))
 
-            return super(cls, BinderIoctl).__new__(
+            return super(cls, BinderReturn).__new__(
                 cls,
                 cmd=cmd,
-                arg=hex(arg),
+                rv=rv
             )
 
 binder_ioctl_pattern = re.compile(
     r"""
     cmd=(0x[0-9a-f]+)\s+
-    arg=(0x[0-9a-f]+)
+    BR_([A-Z]+)
     """,
     re.X|re.M
 )
 
 @register_parser
-def binder_ioctl(payload):
-    """Parser for `binder_ioctl`"""
+def binder_return(payload):
+    """Parser for `binder_return`"""
     try:
         match = re.match(binder_ioctl_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
-            return BinderIoctl(match.group(1), match.group(2))
+            return BinderReturn(match.group(1), match.group(2))
     except Exception, e:
         raise ParserError(e.message)
