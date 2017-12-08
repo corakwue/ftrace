@@ -105,3 +105,6 @@ from .sched_load_avg_cpu import sched_load_avg_cpu
 # Android binder
 from .binder_ioctl import binder_ioctl
 from .binder_return import binder_return
+from .binder_lock import binder_lock
+from .binder_unlock import binder_unlock
+from .binder_locked import binder_locked
