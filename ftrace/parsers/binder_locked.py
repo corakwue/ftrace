@@ -38,6 +38,6 @@ def binder_locked(payload):
         if match:
             match_group_dict = match.groupdict()
             return BinderLocked(match.group(1))
-    except Exception, e:
+    except Exception as e:
         raise ParserError(e.message)
 
