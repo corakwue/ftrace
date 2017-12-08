@@ -31,7 +31,7 @@ class BinderReturn(BinderReturnBase):
                 result=result
             )
 
-binder_ioctl_pattern = re.compile(
+binder_return_pattern = re.compile(
     r"""
     cmd=(0x[0-9a-f]+)\s+
     BR_([A-Z]+)
@@ -43,7 +43,7 @@ binder_ioctl_pattern = re.compile(
 def binder_return(payload):
     """Parser for `binder_return`"""
     try:
-        match = re.match(binder_ioctl_pattern, payload)
+        match = re.match(binder_return_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
             return BinderReturn(match.group(1), match.group(2))

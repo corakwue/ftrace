@@ -29,7 +29,7 @@ class BinderTransactionBufferRelease(BinderTransactionBufferReleaseBase):
                 offsets_size=offsets_size
             )
 
-binder_ioctl_pattern = re.compile(
+binder_transaction_buffer_release_pattern = re.compile(
     r"""
     transaction=(\d+)\s+
     data_size=(\d+)\s+
@@ -42,7 +42,7 @@ binder_ioctl_pattern = re.compile(
 def binder_transaction_buffer_release(payload):
     """Parser for `binder_transaction_buffer_release`"""
     try:
-        match = re.match(binder_ioctl_pattern, payload)
+        match = re.match(binder_transaction_buffer_release_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
             return BinderTransactionBufferRelease(int(match.group(1)), int(match.group(2)), int(match.group(3)))

@@ -35,7 +35,7 @@ class BinderCommand(BinderCommandBase):
                 result=result
             )
 
-binder_ioctl_pattern = re.compile(
+binder_command_pattern = re.compile(
     r"""
     cmd=(0x[0-9a-f]+)\s+
     BC_([A-Z_]+)
@@ -47,7 +47,7 @@ binder_ioctl_pattern = re.compile(
 def binder_command(payload):
     """Parser for `binder_command`"""
     try:
-        match = re.match(binder_ioctl_pattern, payload)
+        match = re.match(binder_command_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
             return BinderCommand(match.group(1), match.group(2))

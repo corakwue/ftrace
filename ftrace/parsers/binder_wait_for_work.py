@@ -29,7 +29,7 @@ class BinderWaitForWork(BinderWaitForWorkBase):
                 thread_todo=thread_todo
             )
 
-binder_ioctl_pattern = re.compile(
+binder_wait_for_work_pattern = re.compile(
     r"""
     proc_work=(\d+)\s+
     transaction_stack=(\d+)\s+
@@ -42,7 +42,7 @@ binder_ioctl_pattern = re.compile(
 def binder_wait_for_work(payload):
     """Parser for `binder_wait_for_work`"""
     try:
-        match = re.match(binder_ioctl_pattern, payload)
+        match = re.match(binder_wait_for_work_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
             return BinderWaitForWork(int(match.group(1)), int(match.group(2)), int(match.group(3)))

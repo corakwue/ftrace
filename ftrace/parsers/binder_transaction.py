@@ -60,7 +60,7 @@ class BinderTransaction(BinderTransactionBase):
                 code=code
             )
 
-binder_ioctl_pattern = re.compile(
+binder_transaction_pattern = re.compile(
     r"""
     transaction=(\d+)\s+
     dest_node=(\d+)\s+
@@ -77,7 +77,7 @@ binder_ioctl_pattern = re.compile(
 def binder_transaction(payload):
     """Parser for `binder_transaction`"""
     try:
-        match = re.match(binder_ioctl_pattern, payload)
+        match = re.match(binder_transaction_pattern, payload)
         if match:
             match_group_dict = match.groupdict()
             return BinderTransaction(int(match.group(1)),
