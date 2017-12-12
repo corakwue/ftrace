@@ -22,7 +22,7 @@ The debugfs needs to be mounted:
 ```
 > Most non-rooted (production) devices ship with some support for Ftrace and restrictions on what can be traced.
 
-# Usage Examples
+# Quick Start
 
 Ftrace parsing library provides API for in-depth analysis of both performance/power related issues.
 A version of this tool was used at Qualcomm (by previous employer) for development of big.LITTLE scheduler,

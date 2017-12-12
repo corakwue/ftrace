@@ -1,21 +1,3 @@
-#!/usr/bin/env python
-
-# Copyright 2015 Huawei Devices USA Inc. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-#
-
 import os
 import sys
 import warnings
@@ -72,15 +54,15 @@ setup(
     version='1.0.0',
     description='Linux ftrace parser library.',
     author='Chuk Orakwue',
-    author_email='chuk.orakwue@huawei.com',
+    author_email='chukwuchebem.orakwue@gmail.com',
     url='https://github.com/corakwue/ftrace/',
     download_url='https://github.com/corakwue/ftrace/',
-    maintainer='Huawei Device USA R&D Power Team',
-    maintainer_email='chuk.orakwue@huawei.com',
+    maintainer='Chuk Orakwue',
+    maintainer_email='chukwuchebem.orakwue@gmail.com',
     packages=packages,
     platforms=['Platform Independent'],
     license='Apache v2',
     classifiers=CLASSIFIERS,
     keywords=KEYWORDS,
-    install_requires=['logbook'],
+    install_requires=['logbook', 'pandas'],
 )
