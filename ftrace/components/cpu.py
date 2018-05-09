@@ -568,12 +568,12 @@ class CPU(FTraceComponent):
                     pass #oh no, likely first time queued or traced
                     
                 last_seen_state[target_cpu][task] = TaskState.TASK_WAKING
-                runnable_tasks[target_cpu].add(task)
                 try:
                     runnable_tasks[last_seen_cpu].remove(task)
                     
                 except KeyError:
                     pass
+                runnable_tasks[target_cpu].add(task)
                 if data.success: # most likely true
                     last_seen_timestamps[target_cpu][task] = timestamp
                     self._tasks_by_cpu[target_cpu].add(task)
