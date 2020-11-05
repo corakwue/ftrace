@@ -22,13 +22,13 @@ import re
 from ftrace.common import ParserError
 from .register import register_parser
 from collections import namedtuple
-#from ftrace.third_party.cnamedtuple import namedtuple
 
 TRACEPOINT = 'sched_wakeup'
 
 
 __all__ = [TRACEPOINT]
 
+# NOTE: 'success' is optional for some android phones and linux kernels
 # comm=tfm_b6bcf800 pid=1714 prio=35 success=1 target_cpu=000
 
 SchedWakeupBase = namedtuple(TRACEPOINT,
@@ -46,7 +46,7 @@ class SchedWakeup(SchedWakeupBase):
     def __new__(cls, comm, pid, prio, success, target_cpu):
             pid = int(pid)
             prio = int(prio)
-            success = int(success)
+            success = 1 if success is None else int(success)
             target_cpu = int(target_cpu)
 
             return super(cls, SchedWakeup).__new__(
@@ -63,7 +63,7 @@ sched_wakeup_pattern = re.compile(
         comm=(?P<comm>.*)\s+
         pid=(?P<pid>\d+)\s+
         prio=(?P<prio>\d+)\s+
-        success=(?P<success>\d+)\s+
+        (success=(?P<success>\d+)\s+)?
         target_cpu=(?P<target_cpu>\d+)
         """,
         re.X|re.M
